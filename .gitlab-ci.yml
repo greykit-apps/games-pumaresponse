@@ -15,3 +15,4 @@ deploy:
     - ssh-keyscan -H "$DREAMHOST_HOST" >> ~/.ssh/known_hosts
   script:
     - rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/pumaresponse.greykit.com/
+    - rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/greykit.com/games/pumaresponse/
