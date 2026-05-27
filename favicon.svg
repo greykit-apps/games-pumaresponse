@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="32" height="32" fill="#020c03" rx="4"/>
+  <g fill="#00ff41" filter="url(#glow)">
+    <!-- 4 toe pads -->
+    <circle cx="9"  cy="13" r="2.6"/>
+    <circle cx="14" cy="11" r="2.6"/>
+    <circle cx="19" cy="11" r="2.6"/>
+    <circle cx="24" cy="13" r="2.6"/>
+    <!-- main pad -->
+    <ellipse cx="16.5" cy="21.5" rx="8.5" ry="6.5"/>
+  </g>
+</svg>
