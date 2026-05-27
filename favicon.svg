@@ -1,18 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="1.2" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <rect width="32" height="32" fill="#020c03" rx="4"/>
-  <g fill="#00ff41" filter="url(#glow)">
-    <!-- 4 toe pads -->
-    <circle cx="9"  cy="13" r="2.6"/>
-    <circle cx="14" cy="11" r="2.6"/>
-    <circle cx="19" cy="11" r="2.6"/>
-    <circle cx="24" cy="13" r="2.6"/>
-    <!-- main pad -->
-    <ellipse cx="16.5" cy="21.5" rx="8.5" ry="6.5"/>
-  </g>
+  <!-- Background -->
+  <rect width="32" height="32" fill="#020c03" rx="2"/>
+
+  <!-- Header bar -->
+  <rect x="0" y="0" width="32" height="5" fill="#040f05" rx="2"/>
+  <rect x="0" y="3" width="32" height="2" fill="#040f05"/>
+  <rect x="0" y="5" width="32" height="0.75" fill="#00aa2b"/>
+
+  <!-- Progress bar (partial fill, ~60%) -->
+  <rect x="0" y="5.75" width="19" height="0.75" fill="#00ff41"/>
+
+  <!-- Panel dividers -->
+  <rect x="9"  y="6.5" width="0.75" height="25.5" fill="#00aa2b"/>
+  <rect x="23" y="6.5" width="0.75" height="25.5" fill="#00aa2b"/>
+
+  <!-- LEFT PANEL: data rows (incident brief) -->
+  <rect x="1"   y="8.5"  width="6"   height="0.75" fill="#00aa2b" opacity="0.55"/>
+  <rect x="1"   y="10.5" width="4.5" height="0.75" fill="#00aa2b" opacity="0.4"/>
+  <rect x="1"   y="12.5" width="6.5" height="0.75" fill="#00aa2b" opacity="0.55"/>
+  <rect x="1"   y="14.5" width="3.5" height="0.75" fill="#00aa2b" opacity="0.35"/>
+  <rect x="1"   y="16.5" width="5.5" height="0.75" fill="#00aa2b" opacity="0.45"/>
+
+  <!-- CENTER PANEL: three choice buttons -->
+  <rect x="10.5" y="8"  width="11.5" height="4"   fill="#001405" stroke="#00aa2b" stroke-width="0.75"/>
+  <rect x="10.5" y="14" width="11.5" height="4"   fill="#001405" stroke="#00aa2b" stroke-width="0.75"/>
+  <rect x="10.5" y="20" width="11.5" height="4"   fill="#001405" stroke="#00aa2b" stroke-width="0.75"/>
+  <!-- key labels inside buttons (amber "A" "B" "C") -->
+  <rect x="11.5" y="9.5"  width="1.5" height="0.75" fill="#ffb000" opacity="0.9"/>
+  <rect x="11.5" y="15.5" width="1.5" height="0.75" fill="#ffb000" opacity="0.9"/>
+  <rect x="11.5" y="21.5" width="1.5" height="0.75" fill="#ffb000" opacity="0.9"/>
+  <!-- button text lines -->
+  <rect x="14"   y="9.5"  width="6.5" height="0.75" fill="#00ff41" opacity="0.65"/>
+  <rect x="14"   y="15.5" width="5"   height="0.75" fill="#00ff41" opacity="0.65"/>
+  <rect x="14"   y="21.5" width="6"   height="0.75" fill="#00ff41" opacity="0.65"/>
+
+  <!-- RIGHT PANEL: SIEM log lines (crit/warn/ok colors) -->
+  <rect x="24.5" y="8.5"  width="6" height="0.65" fill="#ff3333" opacity="0.9"/>
+  <rect x="24.5" y="10.5" width="5" height="0.65" fill="#ffb000" opacity="0.85"/>
+  <rect x="24.5" y="12.5" width="6" height="0.65" fill="#00ff41" opacity="0.65"/>
+  <rect x="24.5" y="14.5" width="4" height="0.65" fill="#ff3333" opacity="0.75"/>
+  <rect x="24.5" y="16.5" width="5" height="0.65" fill="#ffb000" opacity="0.7"/>
+  <rect x="24.5" y="18.5" width="6" height="0.65" fill="#00ff41" opacity="0.5"/>
+  <rect x="24.5" y="20.5" width="3" height="0.65" fill="#00ff41" opacity="0.4"/>
 </svg>
