@@ -243,7 +243,7 @@ body::after {
   color: var(--bg);
   text-shadow: none;
 }
-#about-modal {
+#about-modal, #menu-modal {
   display: none;
   position: fixed;
   inset: 0;
@@ -253,8 +253,8 @@ body::after {
   justify-content: center;
   padding: 20px;
 }
-#about-modal.visible { display: flex; }
-#about-modal-inner {
+#about-modal.visible, #menu-modal.visible { display: flex; }
+#about-modal-inner, #menu-modal-inner {
   background: var(--bg);
   border: 1px solid var(--amber);
   box-shadow: 0 0 30px rgba(255,176,0,0.15), inset 0 0 60px var(--black-50);
@@ -263,7 +263,7 @@ body::after {
   padding: 24px 28px;
   animation: modal-in 0.3s ease both;
 }
-#about-modal-inner h2 {
+#about-modal-inner h2, #menu-modal-inner h2 {
   color: var(--amber);
   font-size: 16px;
   letter-spacing: 2px;
@@ -277,7 +277,7 @@ body::after {
   margin-bottom: 14px;
 }
 #about-modal-inner p:last-of-type { margin-bottom: 20px; }
-#about-close-btn {
+#about-close-btn, #menu-close-btn {
   display: block;
   margin: 0 auto;
   padding: 6px 24px;
@@ -289,7 +289,57 @@ body::after {
   cursor: pointer;
   letter-spacing: 1px;
 }
-#about-close-btn:hover { background: var(--amber); color: var(--bg); }
+#about-close-btn:hover, #menu-close-btn:hover { background: var(--amber); color: var(--bg); }
+#menu-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--green-dim);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--green);
+  font-family: var(--font);
+  font-size: 18px;
+  cursor: pointer;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+#menu-btn:hover { background: var(--green); color: var(--bg); text-shadow: none; }
+#menu-modal-inner { max-height: calc(100vh - 40px); overflow-y: auto; }
+.menu-warning {
+  border: 1px dashed var(--red-dim);
+  background: var(--red-bg-dim);
+  color: var(--red);
+  font-size: 13px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+}
+.menu-warning:empty { display: none; }
+.menu-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.menu-action, .scenario-row {
+  background: none;
+  border: 1px solid var(--green-dim);
+  color: var(--green);
+  font-family: var(--font);
+  cursor: pointer;
+  text-align: left;
+}
+.menu-action { flex: 1 1 200px; font-size: 14px; padding: 10px 12px; letter-spacing: 1px; }
+.menu-action:hover, .scenario-row:hover { background: var(--green-bg-dim); border-color: var(--green); }
+.menu-section {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--amber);
+  margin-bottom: 8px;
+}
+#scenario-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+.scenario-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 12px; font-size: 13px; }
+.scenario-row .sr-title { color: var(--green); }
+.scenario-row .sr-sev { font-size: 11px; color: var(--amber); text-align: right; }
+.scenario-row .sr-sev.crit { color: var(--red); }
+.scenario-row .sr-client { font-size: 12px; color: var(--green-dim); }
+.scenario-row .sr-played { font-size: 11px; color: var(--green-dim); text-align: right; }
+.scenario-row.current { border-style: dashed; }
+.end-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 #phase-indicator {
   font-size: 12px;
   letter-spacing: 1px;
@@ -967,7 +1017,10 @@ body::after {
   #about-modal-inner { padding: 16px; }
   #about-modal-inner h2 { font-size: 14px; }
   #about-modal-inner p { font-size: 13px; line-height: 1.6; }
-  #about-close-btn { padding: 10px 20px; min-height: 44px; }
+  #about-close-btn, #menu-close-btn { padding: 10px 20px; min-height: 44px; }
+  #menu-modal { padding: 12px; }
+  #menu-modal-inner { padding: 16px; }
+  .end-actions { flex-direction: column; width: 100%; }
 }
 
 /* Small phones: tighter adjustments */
@@ -1033,6 +1086,7 @@ body::after {
     <div class="header-stat">ELAPSED: <span id="hdr-elapsed">00:00</span></div>
     <div class="header-spacer"></div>
     <div id="phase-indicator" aria-live="polite">INITIALIZING...</div>
+    <button id="menu-btn" title="Restart or change incident" aria-label="Restart or change incident" aria-haspopup="dialog">↺</button>
     <button id="about-btn" title="About PumaResponse" aria-label="About PumaResponse">?</button>
   </header>
   <div id="phase-progress-bar" role="progressbar" aria-label="Phase progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="phase-progress-fill"></div></div>
@@ -1087,7 +1141,26 @@ body::after {
   <div class="end-subtitle" id="end-subtitle"></div>
   <div class="scorecard" id="end-scorecard"></div>
   <div id="end-debrief" class="end-debrief"></div>
-  <button class="overlay-btn" id="new-incident-btn">NEW INCIDENT</button>
+  <div class="end-actions">
+    <button class="overlay-btn" id="replay-incident-btn">REPLAY THIS INCIDENT</button>
+    <button class="overlay-btn" id="new-incident-btn">NEW INCIDENT</button>
+    <button class="overlay-btn" id="choose-incident-btn">CHOOSE SCENARIO</button>
+  </div>
+</div>
+
+<!-- INCIDENT MENU -->
+<div id="menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+  <div id="menu-modal-inner">
+    <h2 id="menu-title">// INCIDENT CONTROL</h2>
+    <p id="menu-warning" class="menu-warning"></p>
+    <div class="menu-actions">
+      <button class="menu-action" id="menu-replay">↺ REPLAY THIS INCIDENT</button>
+      <button class="menu-action" id="menu-random">▸ NEW RANDOM INCIDENT</button>
+    </div>
+    <div class="menu-section">CHOOSE A SCENARIO</div>
+    <div id="scenario-list"></div>
+    <button id="menu-close-btn">[CANCEL]</button>
+  </div>
 </div>
 
 <script>
@@ -3792,6 +3865,8 @@ const STATE = {
   choices: [],
   flags: {},
   carried: [],
+  played: new Set(),   // incident ids started this session — random picks skip these
+  siemTimers: [],      // pending staggered SIEM entries, cleared on restart
   started: false,
   awaitingContinue: false,
 };
@@ -3954,7 +4029,7 @@ function renderPhase() {
 
   // Add SIEM entries for this phase
   resolve(phase.siemEntries).forEach((e, i) => {
-    setTimeout(() => addSiemEntry(e.time, e.sev, resolve(e.text)), i * 400);
+    STATE.siemTimers.push(setTimeout(() => addSiemEntry(e.time, e.sev, resolve(e.text)), i * 400));
   });
 
   renderScoreTracker();
@@ -4115,12 +4190,13 @@ function endGame() {
 
   $('end-screen').classList.add('visible');
   // Focus management: move focus to the end screen for accessibility
-  $('new-incident-btn').focus();
+  $('replay-incident-btn').focus();
 }
 
 // ── KEYBOARD CONTROLS ──────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (!STATE.started) return;
+  if ($('menu-modal').classList.contains('visible') || $('about-modal').classList.contains('visible')) return;
 
   const key = e.key.toUpperCase();
   // A/B/C and 1/2/3 select by display position (nth button on screen)
@@ -4148,9 +4224,25 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── START GAME ─────────────────────────────────────
-function startGame() {
-  // Pick random incident
-  STATE.incident = INCIDENTS[Math.floor(Math.random() * INCIDENTS.length)];
+// Random pick from incidents not yet played this session; once all have been
+// seen the pool refills, minus the one just played so it never repeats back to back.
+function pickIncident() {
+  let pool = INCIDENTS.filter(i => !STATE.played.has(i.id));
+  if (!pool.length) {
+    STATE.played.clear();
+    pool = INCIDENTS.filter(i => i !== STATE.incident);
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// An incident is "in progress" once it has started and the end screen isn't up
+function incidentInProgress() {
+  return STATE.started && !$('end-screen').classList.contains('visible');
+}
+
+function startGame(incident) {
+  STATE.incident = incident || pickIncident();
+  STATE.played.add(STATE.incident.id);
   STATE.phaseIdx = 0;
   STATE.scores = { time: 0, containment: 0, evidence: 0, thoroughness: 0 };
   STATE.elapsed = 0;
@@ -4165,6 +4257,16 @@ function startGame() {
   const sevSpan = $('hdr-severity');
   sevSpan.textContent = STATE.incident.severity;
   sevSpan.className = STATE.incident.sevClass === 'high' ? 'crit' : '';
+
+  // Clear anything left over from a previous incident
+  STATE.siemTimers.forEach(clearTimeout);
+  STATE.siemTimers = [];
+  $('siem-feed-col').innerHTML = '';
+  renderNotes();
+  $('main').classList.remove('siem-expanded');
+  const actionTab = document.querySelector('#mobile-tabs button[data-panel="action"]');
+  if (actionTab) actionTab.click();
+  $('end-screen').classList.remove('visible');
 
   // Show game screen
   $('game-screen').classList.add('visible');
@@ -4243,8 +4345,63 @@ document.querySelectorAll('#mobile-tabs button').forEach(btn => {
   });
 });
 
-// ── NEW INCIDENT BUTTON ─────────────────────────
-$('new-incident-btn').addEventListener('click', () => location.reload());
+// ── INCIDENT MENU / RESTART ─────────────────────
+// Restarting never reloads the page, so the boot sequence only plays once.
+let menuReturnFocus = null;
+function openMenu() {
+  menuReturnFocus = document.activeElement;
+  const inc = STATE.incident;
+  $('menu-warning').textContent = incidentInProgress()
+    ? `${inc.ticketId} is still open (phase ${STATE.phaseIdx + 1} of ${PHASE_NAMES.length}). Starting another incident abandons it — progress is lost.`
+    : '';
+  $('menu-replay').textContent = `↺ REPLAY ${inc.ticketId}`;
+  $('scenario-list').innerHTML = INCIDENTS.map((i, idx) => `
+    <button class="scenario-row${i === inc ? ' current' : ''}" data-idx="${idx}">
+      <span class="sr-title">${escapeHtml(i.title)}</span>
+      <span class="sr-sev${i.severity === 'CRITICAL' ? ' crit' : ''}">${escapeHtml(i.severity)}</span>
+      <span class="sr-client">${escapeHtml(i.client)}</span>
+      <span class="sr-played">${i === inc ? 'CURRENT' : STATE.played.has(i.id) ? 'PLAYED' : ''}</span>
+    </button>`).join('');
+  $('menu-modal').classList.add('visible');
+  $('menu-close-btn').focus({ preventScroll: true });
+  $('menu-modal-inner').scrollTop = 0; // on phones the list scrolls; keep the warning in view
+}
+function closeMenu() {
+  $('menu-modal').classList.remove('visible');
+  if (menuReturnFocus && document.contains(menuReturnFocus)) menuReturnFocus.focus();
+}
+function restartWith(incident) {
+  $('menu-modal').classList.remove('visible');
+  startGame(incident);
+  const first = document.querySelector('.choice-btn');
+  if (first) first.focus();
+}
+
+$('menu-btn').addEventListener('click', (e) => { e.stopPropagation(); openMenu(); });
+$('menu-close-btn').addEventListener('click', closeMenu);
+$('menu-replay').addEventListener('click', () => restartWith(STATE.incident));
+$('menu-random').addEventListener('click', () => restartWith());
+$('scenario-list').addEventListener('click', (e) => {
+  const row = e.target.closest('.scenario-row');
+  if (row) restartWith(INCIDENTS[+row.dataset.idx]);
+});
+$('menu-modal').addEventListener('click', (e) => {
+  if (e.target === $('menu-modal')) closeMenu();
+});
+$('menu-modal').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeMenu(); return; }
+  if (e.key === 'Tab') {
+    const focusable = $('menu-modal-inner').querySelectorAll('button');
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
+
+$('replay-incident-btn').addEventListener('click', () => restartWith(STATE.incident));
+$('new-incident-btn').addEventListener('click', () => restartWith());
+$('choose-incident-btn').addEventListener('click', openMenu);
 
 // Console easter egg (guarded against duplicate execution)
 if (!window.__pumaConsoleLogged) {

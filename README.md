@@ -8,7 +8,7 @@ PumaResponse is an incident response training simulator that puts you in the sea
 
 An interactive, browser-based simulator where you work through the six phases of incident response — **Triage, Containment, Investigation, Eradication, Recovery, and Post-Incident** — making branching decisions that are scored on response time, containment effectiveness, evidence preservation, and thoroughness.
 
-Each playthrough randomly assigns one of seven real-world incident scenarios. You read situation briefings, examine forensic evidence and SIEM logs, and choose from three response options per phase. In the BEC scenario your decisions cascade: early choices change what later phases show, which options exist, and what they cost, and consequences carry forward into the debrief. The other six scenarios still score each phase independently.
+Each playthrough assigns one of seven real-world incident scenarios, picked at random from the ones you haven't played yet this session, or chosen from a list. You read situation briefings, examine forensic evidence and SIEM logs, and choose from three response options per phase. In the BEC scenario your decisions cascade: early choices change what later phases show, which options exist, and what they cost, and consequences carry forward into the debrief. The other six scenarios still score each phase independently.
 
 ![Triage phase — reading evidence and selecting a response](screenshots/triage.png)
 
@@ -29,7 +29,7 @@ Each playthrough randomly assigns one of seven real-world incident scenarios. Yo
 
 ## Scenarios
 
-Seven incident scenarios are randomly selected each playthrough:
+Seven incident scenarios. By default one is picked at random from those you haven't played yet this session; the ↺ menu lets you choose one directly:
 
 | Scenario | Severity | Description |
 |----------|----------|-------------|
@@ -67,13 +67,15 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). Responsive on mobil
 | `A` / `B` / `C` or `1` / `2` / `3` | Select a response option |
 | `Enter` / `Space` | Advance to the next phase |
 | Mouse / Touch | Click choices and buttons |
+| `↺` (header) | Replay the current incident, start a new random one, or choose a scenario — abandons the incident in progress |
+| `Esc` | Close the ↺ menu or the About dialog |
 
 ### Game Flow
 
 1. **Boot sequence** — Watch the MSSP platform initialize (or press any key to skip)
 2. **Incident assignment** — Read the briefing, IOCs, and SIEM alerts
 3. **Six decision phases** — Choose your response at each phase; see the outcome and score impact
-4. **Performance debrief** — Get your final grade (A through F) with a full scorecard breakdown
+4. **Performance debrief** — Get your final grade (A through F) with a full scorecard breakdown, then replay the same incident, start a new one, or choose a scenario
 
 ![End screen — performance scorecard and phase decision chain](screenshots/endscreen.png)
 
