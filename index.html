@@ -600,6 +600,34 @@ body::after {
 .outcome-title.good { color: var(--green); }
 .outcome-title.bad { color: var(--red); }
 .outcome-title.neutral { color: var(--amber); }
+.carried-box {
+  border: 1px dashed var(--amber-dim);
+  background: var(--amber-bg-faint);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  animation: slide-up 0.2s ease;
+}
+.carried-title {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--amber);
+  margin-bottom: 4px;
+}
+.carried-item {
+  font-size: 12px;
+  line-height: 1.5;
+  padding-left: 12px;
+  text-indent: -12px;
+  color: var(--green-dim);
+}
+.carried-item::before { content: '▸ '; }
+.carried-item.bad::before { color: var(--red); }
+.carried-item.good::before { color: var(--green); }
+.carried-item.info::before { color: var(--amber); }
+.carried-score { font-size: 11px; white-space: nowrap; }
+.end-carried { text-align: left; max-width: 560px; margin: 0 auto; }
+.carried-score .pos { color: var(--green); }
+.carried-score .neg { color: var(--red); }
 .outcome-text {
   font-size: 13px;
   color: var(--green-dim);
@@ -1476,6 +1504,28 @@ const INCIDENTS = [
       { type: 'EMAIL RULE', val: 'Inbox rule "Administrative" — auto-forward + delete' },
       { type: 'ACCOUNT', val: 'CEO M365 account — suspicious sign-in from unfamiliar location' },
     ],
+    // Run state. Every later phase reads these; choices change them via `sets`.
+    initialFlags: {
+      wireRecovered: 0,       // dollars of the $340K clawed back
+      recallFiled: false,     // did anyone ever ask the bank to recall the wire?
+      headersAnalyzed: false, // triage spent time on the headers
+      attackerTipped: false,  // the attacker saw us coming
+      mfaBackdoor: false,     // attacker registered their own Authenticator on the CEO account
+      ceoDisabled: false,     // CEO account disabled rather than cleaned
+      rulesRemain: false,     // CEO inbox rule / forwarding still live
+      vpSecured: false,       // VP Sales account locked down
+      scopeAssessed: false,   // the 847 exposed emails were catalogued
+      vendorFraud: false,     // VP Sales account was used to redirect vendor payments
+      legalEngaged: false,    // counsel assessed SEC / breach-notification duties
+    },
+    debrief: f => {
+      const vendorLoss = f.vendorFraud ? 87000 : 0;
+      return [
+        ['Wire Recovered', `${fmtUSD(f.wireRecovered)} of $340,000`],
+        ['Total Client Loss', fmtUSD(340000 - f.wireRecovered + vendorLoss)],
+        ['Attacker Access at Close', (f.mfaBackdoor && !f.ceoDisabled) || !f.vpSecured ? 'STILL PRESENT' : 'Removed'],
+      ];
+    },
     phases: [
       { // TRIAGE
         name: 'TRIAGE',
@@ -1515,6 +1565,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Priority one: stop the money. Contact CFO to initiate wire recall with their bank.',
             quality: 'good',
             score: { time: 20, containment: 25, evidence: 5, thoroughness: 10 },
+            sets: { wireRecovered: 285000, recallFiled: true },
             outcome: 'You immediately instruct Janet to call the bank\'s wire fraud department. Because it\'s within the 24-hour recall window, the bank initiates a SWIFT recall. $285,000 of the $340,000 is frozen before it leaves the correspondent bank. Quick action saved the majority of the funds.',
           },
           {
@@ -1523,7 +1574,8 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Understand the attack before acting. Check if the CEO\'s account is compromised.',
             quality: 'partial',
             score: { time: -10, containment: -15, evidence: 15, thoroughness: 10 },
-            outcome: 'Your investigation reveals the email was spoofed (not from a compromised CEO account) and identifies the typosquat domain. However, you spent 45 minutes before advising the bank recall. By then, $200,000 has already been forwarded through intermediary accounts and is unrecoverable.',
+            sets: { wireRecovered: 140000, recallFiled: true, headersAnalyzed: true },
+            outcome: 'Your analysis confirms the SPF failure and pins the reply-to on a typosquat domain, ashf0rd-mfg.com — the attacker never needed to send from the real mailbox to receive the answers. But you spent 45 minutes before advising the bank recall. By then, $200,000 has already been forwarded through intermediary accounts and is unrecoverable.',
           },
           {
             key: 'C',
@@ -1531,7 +1583,8 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Send the CEO an email asking if this wire request is legitimate.',
             quality: 'bad',
             score: { time: -20, containment: -20, evidence: -5, thoroughness: -10 },
-            outcome: 'The CEO is on vacation with limited connectivity. He doesn\'t respond for 3 hours. Meanwhile, the wire clears through intermediary banks and the money is gone. Additionally, replying to the spoofed address tips off the attacker that you\'re investigating.',
+            sets: { attackerTipped: true, mfaBackdoor: true },
+            outcome: 'The CEO is on vacation with limited connectivity. He doesn\'t respond for 3 hours. Meanwhile, the wire clears through intermediary banks and no recall is ever requested. Worse: your reply went to the Reply-To address — the attacker\'s typosquat — so they now know the MSSP is involved.',
           },
         ],
         siemEntries: [
@@ -1543,10 +1596,21 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
       },
       { // CONTAINMENT
         name: 'CONTAINMENT',
-        narrative: 'The wire recall is in progress. Now you need to determine if the CEO\'s M365 account was actually compromised (vs. simple email spoofing) and contain any unauthorized access. Audit logs show a suspicious sign-in to the CEO\'s account from an unusual location.',
+        narrative: f => [
+          f.recallFiled
+            ? 'The wire recall is in progress.'
+            : 'No wire recall was ever filed — by the time the CEO answered, the money had cleared.',
+          f.headersAnalyzed
+            ? 'Your header work already tied the reply-to to ashf0rd-mfg.com, so you know what to look for.'
+            : '',
+          f.attackerTipped
+            ? 'Your reply landed in the attacker\'s inbox; assume they are moving to keep their access.'
+            : '',
+          'Now determine whether the CEO\'s M365 account was actually compromised (vs. simple email spoofing) and contain any unauthorized access. Audit logs show a suspicious sign-in to the CEO\'s account from an unusual location.',
+        ].filter(Boolean).join(' '),
         evidence: {
           title: 'M365 AUDIT LOG — CEO ACCOUNT',
-          content: `<span class="log-warn">[Feb 17 02:14]</span> Sign-in: ceo@ashford-mfg.com
+          content: f => `<span class="log-warn">[Feb 17 02:14]</span> Sign-in: ceo@ashford-mfg.com
   Location: Lagos, Nigeria (IP: 41.190.2.44)
   Status: <span class="log-highlight">SUCCESS</span>
   MFA: <span class="log-highlight">NOT CONFIGURED</span>
@@ -1557,7 +1621,10 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
 <span class="log-warn">[Feb 17 02:18]</span> Mail forwarding: ceo@ashf0rd-mfg.com added
 <span class="log-warn">[Feb 17 03:00]</span> 847 emails accessed in CEO mailbox
 <span class="log-warn">[Feb 18 11:48]</span> Spoofed email sent externally (from different infra)
-<span class="log-ok">[Feb 19 14:22]</span> Incident reported to MSSP`
+<span class="log-ok">[Feb 19 14:22]</span> Incident reported to MSSP${f.attackerTipped ? `
+<span class="log-warn">[Feb 19 14:31]</span> Sign-in: ceo@ashford-mfg.com from 41.190.2.44
+<span class="log-warn">[Feb 19 14:33]</span> <span class="log-highlight">Security info registered: Authenticator app "iPhone 15"</span>
+  Tenant setting: Self-service password reset ENABLED (1 method)` : ''}`
         },
         choices: [
           {
@@ -1566,7 +1633,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Full account containment: lock out the attacker, clean up persistence, and block the lookalike domain.',
             quality: 'good',
             score: { time: 10, containment: 25, evidence: 10, thoroughness: 15 },
-            outcome: 'CEO\'s password reset and all active sessions revoked. The malicious inbox rule and mail forwarding to the typosquat domain removed. IT blocks ashf0rd-mfg.com at the email gateway and web proxy. The attacker is fully locked out.',
+            outcome: 'CEO\'s password reset and all active sessions revoked. The malicious inbox rule and mail forwarding to the typosquat domain removed. IT blocks ashf0rd-mfg.com at the email gateway and web proxy. The attacker appears to be locked out.',
           },
           {
             key: 'B',
@@ -1574,7 +1641,9 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Secure the account with new credentials and add multi-factor authentication.',
             quality: 'partial',
             score: { time: 10, containment: 10, evidence: 0, thoroughness: 0 },
-            outcome: 'Password reset and MFA enabled — good. But you forgot to revoke existing sessions (the attacker\'s token is still valid for up to an hour) and didn\'t remove the inbox rule that\'s silently forwarding emails to the typosquat domain. The attacker continues receiving forwarded emails for 47 more minutes.',
+            sets: { rulesRemain: true },
+            outcome: f => 'Password reset and MFA enabled — good. But you didn\'t revoke existing sessions (the attacker\'s token stays valid for up to an hour) and didn\'t remove the inbox rule that\'s silently forwarding emails to the typosquat domain.'
+              + (f.attackerTipped ? ' And the MFA prompt the CEO gets offers him an Authenticator he never set up — he assumes IT did it.' : ''),
           },
           {
             key: 'C',
@@ -1582,21 +1651,49 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Completely disable the account to prevent any access.',
             quality: 'bad',
             score: { time: 5, containment: 15, evidence: -10, thoroughness: -5 },
+            sets: { ceoDisabled: true, rulesRemain: true },
             outcome: 'Account disabled — attacker is locked out, but so is the CEO. He\'s on vacation and now can\'t access email, Teams, or OneDrive. Important business communications are disrupted. The inbox rule and forwarding are still configured and will reactivate when the account is re-enabled.',
           },
         ],
-        siemEntries: [
+        siemEntries: f => [
           { time: '14:40', sev: 'crit', text: 'CEO account compromised — sign-in from Lagos, Nigeria' },
           { time: '14:41', sev: 'warn', text: 'Malicious inbox rule found — forwarding wire/payment emails' },
           { time: '14:42', sev: 'warn', text: 'No MFA configured on executive accounts' },
+          ...(f.attackerTipped ? [{ time: '14:43', sev: 'crit', text: 'New security info on CEO account — registered from 41.190.2.44' }] : []),
         ],
       },
       { // INVESTIGATION
         name: 'INVESTIGATION',
-        narrative: 'The CEO\'s account is secured. You need to determine the full scope: how the credentials were obtained, whether other accounts are compromised, and what data the attacker accessed in the 2 days they had access to the CEO\'s mailbox.',
+        carried: f => {
+          const out = [];
+          if (f.mfaBackdoor && !f.ceoDisabled) out.push({
+            text: '15:02 — the attacker used the Authenticator they registered at 14:33 to self-service reset the CEO\'s password. They are back in the mailbox.',
+            score: { containment: -10, evidence: -5 },
+          });
+          if (f.mfaBackdoor && f.ceoDisabled) out.push({
+            sev: 'info',
+            text: '15:02 — a self-service password reset on the CEO account was attempted from 41.190.2.44 and failed: the account is disabled.',
+          });
+          if (f.rulesRemain && !f.ceoDisabled) out.push({
+            text: 'The "Administrative" forwarding rule is still live — every wire or payment email since containment went to ashf0rd-mfg.com.',
+            score: { containment: -5 },
+          });
+          if (f.ceoDisabled) out.push({
+            sev: 'info',
+            text: 'The CEO is locked out of email while traveling; his assistant is fielding board questions by phone.',
+          });
+          if (!f.recallFiled) out.push({
+            text: 'No wire recall was filed. All $340,000 is in the wind.',
+          });
+          return out;
+        },
+        narrative: f => (f.mfaBackdoor && !f.ceoDisabled
+          ? 'You thought the CEO\'s account was secured. It isn\'t. '
+          : 'The CEO\'s account is secured. ')
+          + 'You need to determine the full scope: how the credentials were obtained, whether other accounts are compromised, and what data the attacker accessed in the 2 days they had access to the CEO\'s mailbox.',
         evidence: {
           title: 'CREDENTIAL THEFT ANALYSIS',
-          content: `<span class="log-ok">── PHISHING CAMPAIGN DETECTED ──</span>
+          content: f => `<span class="log-ok">── PHISHING CAMPAIGN DETECTED ──</span>
 <span class="log-warn">[Feb 15 08:33]</span> Email to ceo@ashford-mfg.com
   From: IT-Support@microsoft-365-admin.com
   Subject: "Action Required: Password Expiry Notice"
@@ -1609,7 +1706,8 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
   Entered credentials: 2 (CEO + VP Sales)
   VP Sales account: <span class="log-highlight">Also compromised</span>
     Sign-in from 41.190.2.44 on Feb 17 02:30
-    No inbox rules created (yet)
+    No inbox rules created (yet)${f.mfaBackdoor && !f.ceoDisabled ? `
+  CEO account: <span class="log-highlight">SSPR reset Feb 19 15:02 via Authenticator "iPhone 15"</span>` : ''}
 
 <span class="log-ok">── CEO MAILBOX ACCESS ──</span>
   Attacker accessed: 847 emails over 2 days
@@ -1623,7 +1721,16 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Reset all potentially compromised accounts, check for additional inbox rules, catalogue exposed data.',
             quality: 'good',
             score: { time: 5, containment: 15, evidence: 20, thoroughness: 20 },
-            outcome: 'VP Sales account secured (password reset, MFA, session revocation). All 12 phishing targets audited — no additional compromises beyond the two identified. Data exposure assessment documents all 847 accessed emails, including 3 board presentations and the M&A target list. Legal counsel notified about potential material non-public information exposure.',
+            sets: f => ({
+              vpSecured: true,
+              scopeAssessed: true,
+              rulesRemain: false,
+              // The audit covers sign-ins and security info — unless the account is disabled, the rogue Authenticator surfaces here
+              mfaBackdoor: f.mfaBackdoor && f.ceoDisabled,
+            }),
+            outcome: f => 'VP Sales account secured (password reset, MFA, session revocation). All 12 phishing targets audited — no additional compromises beyond the two identified. Data exposure assessment documents all 847 accessed emails, including 3 board presentations and the M&A target list. Legal counsel notified about potential material non-public information exposure.'
+              + (f.rulesRemain && !f.ceoDisabled ? ' The audit also finds the CEO\'s forwarding rule still live — removed.' : '')
+              + (f.mfaBackdoor && !f.ceoDisabled ? ' And it catches the rogue "iPhone 15" Authenticator on the CEO account. You remove it, reset the password again and revoke every session — this time the attacker is out for good.' : ''),
           },
           {
             key: 'B',
@@ -1631,6 +1738,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Fix the second compromised account. Don\'t audit the other 10 phishing targets.',
             quality: 'partial',
             score: { time: 10, containment: 5, evidence: 5, thoroughness: -5 },
+            sets: { vpSecured: true },
             outcome: 'VP Sales account secured. But you didn\'t audit the other 10 employees who received the phishing email — you\'re assuming only those who clicked were at risk. You also didn\'t assess the full scope of data exposed from the CEO\'s mailbox, leaving legal counsel without the information they need for regulatory notifications.',
           },
           {
@@ -1639,10 +1747,11 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'The wire fraud is the incident. Account compromise is a security hygiene issue for later.',
             quality: 'bad',
             score: { time: 15, containment: -10, evidence: -15, thoroughness: -20 },
-            outcome: 'By treating this as two separate issues, you miss the connection between the credential phishing and the BEC. The VP Sales account remains compromised for another week before anyone notices. The attacker uses it to send fraudulent invoices to 3 of Ashford\'s vendors, resulting in an additional $87,000 in losses.',
+            outcome: 'By treating this as two separate issues, you miss the connection between the credential phishing and the BEC. The VP Sales account — the one the attacker hasn\'t used yet — stays in their hands.',
           },
         ],
-        siemEntries: [
+        siemEntries: f => [
+          ...(f.mfaBackdoor && !f.ceoDisabled ? [{ time: '15:02', sev: 'crit', text: 'SSPR password reset — CEO account — from 41.190.2.44' }] : []),
           { time: '15:10', sev: 'warn', text: 'Credential phishing campaign identified — 12 targets' },
           { time: '15:12', sev: 'crit', text: 'Second compromised account found: VP Sales' },
           { time: '15:15', sev: 'warn', text: 'CEO mailbox: 847 emails accessed incl. M&A data' },
@@ -1650,17 +1759,35 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
       },
       { // ERADICATION
         name: 'ERADICATION',
-        narrative: 'You\'ve mapped the full attack. Now remove all attacker access and infrastructure. The typosquat domain is still active and could be used against other targets.',
+        carried: f => {
+          const out = [];
+          if (!f.vpSecured) out.push({
+            text: 'The VP Sales account you left alone now has an inbox rule of its own. Three of Ashford\'s vendors received "updated banking details" from vpsales@ashford-mfg.com.',
+            score: { containment: -15, thoroughness: -5 },
+          });
+          if (f.mfaBackdoor && !f.ceoDisabled) out.push({
+            text: 'The attacker still holds the CEO account through the Authenticator they registered.',
+            score: { containment: -10 },
+          });
+          return out;
+        },
+        narrative: f => (f.scopeAssessed
+          ? 'You\'ve mapped the full attack. '
+          : 'You have a partial picture of the attack — enough, you hope, to clean up. ')
+          + 'Now remove all attacker access and infrastructure. The typosquat domain is still active and could be used against other targets.',
         evidence: {
           title: 'ATTACKER INFRASTRUCTURE',
-          content: `<span class="log-highlight">DOMAINS:</span>
+          content: f => `<span class="log-highlight">DOMAINS:</span>
   ashf0rd-mfg.com — registered Feb 16 via Namecheap
   microsoft-365-admin.com — credential phishing site
 
 <span class="log-highlight">INBOX RULES / FORWARDING:</span>
-  CEO: Rule "Administrative" + forward to ashf0rd-mfg.com
-  VP Sales: No rules created (attacker may not have set up yet)
-
+  CEO: Rule "Administrative" + forward to ashf0rd-mfg.com — ${f.rulesRemain ? '<span class="log-highlight">STILL ACTIVE</span>' : 'removed'}
+  VP Sales: ${f.vpSecured ? 'No rules (account secured)' : '<span class="log-highlight">Rule "Sync" created Feb 20 — forwards "invoice" mail externally</span>'}
+${f.mfaBackdoor ? `
+<span class="log-highlight">AUTHENTICATION METHODS:</span>
+  CEO: Authenticator "iPhone 15" — registered from 41.190.2.44
+` : ''}
 <span class="log-highlight">EMAIL CONFIGURATION GAPS:</span>
   DMARC: p=none (no enforcement)
   DKIM: Not configured
@@ -1675,7 +1802,10 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Clean up all attacker persistence AND fix the underlying email security gaps that allowed this.',
             quality: 'good',
             score: { time: 5, containment: 15, evidence: 5, thoroughness: 20 },
-            outcome: 'All malicious inbox rules and forwarding removed. Abuse report filed with Namecheap for ashf0rd-mfg.com — domain suspended within 4 hours. DMARC upgraded to p=reject, DKIM configured, SPF hardened to -all. External email warning banner deployed. MFA enforced for all users.',
+            sets: f => ({ vendorFraud: !f.vpSecured, vpSecured: true, rulesRemain: false, mfaBackdoor: false }),
+            outcome: f => 'All malicious inbox rules and forwarding removed. Abuse report filed with Namecheap for ashf0rd-mfg.com — domain suspended within 4 hours. DMARC upgraded to p=reject, DKIM configured, SPF hardened to -all. External email warning banner deployed. MFA enforced for all users.'
+              + (f.mfaBackdoor ? ' The MFA rollout includes a review of every registered method — the rogue Authenticator on the CEO account is finally removed.' : '')
+              + (!f.vpSecured ? ' Pulling the VP Sales rule is what finally gets that account reset — too late for the vendor payments already redirected.' : ''),
           },
           {
             key: 'B',
@@ -1683,6 +1813,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Clean up the immediate persistence and add MFA. Leave email auth for later.',
             quality: 'partial',
             score: { time: 10, containment: 5, evidence: 0, thoroughness: 5 },
+            sets: f => ({ vendorFraud: !f.vpSecured, rulesRemain: false }),
             outcome: 'Rules removed and MFA deployed — good immediate actions. But DMARC remains at p=none, meaning the attacker (or anyone else) can still spoof ashford-mfg.com emails. The typosquat domain stays active. A competitor later uses the same technique.',
           },
           {
@@ -1691,29 +1822,55 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Minimal cleanup. Email auth improvements are out of scope for this IR engagement.',
             quality: 'bad',
             score: { time: 15, containment: -5, evidence: 0, thoroughness: -15 },
+            sets: f => ({ vendorFraud: !f.vpSecured, rulesRemain: false }),
             outcome: 'Rules removed but nothing else changes. The typosquat domain remains active. Three weeks later, the same attacker uses it to target Ashford\'s AP department with fake vendor invoices. DMARC still allows spoofing. The client questions why their MSSP didn\'t flag these gaps.',
           },
         ],
-        siemEntries: [
+        siemEntries: f => [
           { time: '16:00', sev: 'info', text: 'Eradication: removing attacker persistence from M365' },
+          ...(f.vpSecured ? [] : [{ time: '16:02', sev: 'crit', text: 'VP Sales mailbox: 3 outbound "banking update" emails to vendors' }]),
           { time: '16:05', sev: 'success', text: 'Malicious inbox rules removed from CEO account' },
           { time: '16:10', sev: 'warn', text: 'Typosquat domain ashf0rd-mfg.com still active' },
         ],
       },
       { // RECOVERY
         name: 'RECOVERY',
-        narrative: 'Attacker access is removed. The CEO and VP Sales accounts are secured. Now you need to ensure the organization recovers safely and the wire fraud is properly handled through financial and legal channels.',
+        carried: f => {
+          const out = [];
+          if (f.vendorFraud) out.push({
+            text: 'Two vendors paid the "updated" account before anyone caught it: $87,000 lost on top of the wire.',
+            score: { containment: -10 },
+          });
+          if (!f.vpSecured) out.push({
+            text: 'The VP Sales account is still attacker-controlled. Removing its rule did nothing about the stolen password.',
+            score: { containment: -10 },
+          });
+          if (f.mfaBackdoor && !f.ceoDisabled) out.push({
+            text: 'The CEO account still carries the attacker\'s Authenticator. They can reset their way back in at will.',
+            score: { containment: -10 },
+          });
+          return out;
+        },
+        narrative: f => {
+          const ceo = f.ceoDisabled ? 'The CEO\'s account is still disabled' : (f.mfaBackdoor ? 'The CEO\'s account is not actually clean' : 'The CEO\'s account is secured');
+          const vp = f.vpSecured ? 'VP Sales is locked down' : 'VP Sales was never secured';
+          return `${ceo}; ${vp}. Now you need to ensure the organization recovers safely and the wire fraud is properly handled through financial and legal channels.`;
+        },
         evidence: {
           title: 'RECOVERY STATUS',
-          content: `<span class="log-ok">ACCOUNT STATUS:</span>
-  CEO: Password reset, MFA enabled, sessions revoked ✓
-  VP Sales: Password reset, MFA enabled, sessions revoked ✓
+          content: f => `<span class="log-ok">ACCOUNT STATUS:</span>
+  CEO: ${f.ceoDisabled ? '<span class="log-warn">DISABLED — CEO has had no email for hours</span>'
+      : f.mfaBackdoor ? '<span class="log-highlight">Attacker Authenticator still registered ✗</span>'
+      : 'Password reset, MFA enabled, sessions revoked ✓'}
+  VP Sales: ${f.vpSecured ? 'Password reset, MFA enabled, sessions revoked ✓' : '<span class="log-highlight">NOT SECURED ✗</span>'}
   All users: MFA rollout in progress (ETA: 48 hours)
 
 <span class="log-warn">FINANCIAL STATUS:</span>
-  Wire amount: $340,000
-  Recalled/frozen: Amount depends on triage speed
-  Unrecoverable: Remainder transferred to offshore accounts
+  Wire amount:       $340,000
+  Recall filed:      ${f.recallFiled ? 'Yes' : '<span class="log-highlight">NO</span>'}
+  Recalled/frozen:   ${fmtUSD(f.wireRecovered)}
+  Unrecovered:       ${fmtUSD(340000 - f.wireRecovered)}${f.vendorFraud ? `
+  Vendor fraud:      <span class="log-highlight">$87,000</span> (via VP Sales account)` : ''}
 
 <span class="log-warn">LEGAL / REGULATORY:</span>
   - IC3 complaint not yet filed
@@ -1724,11 +1881,23 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
         choices: [
           {
             key: 'A',
-            label: 'File IC3, notify insurance, engage legal for SEC/breach notification assessment',
+            label: f => (f.ceoDisabled ? 'Re-enable the CEO with clean credentials, then f' : 'F')
+              + 'ile IC3, notify insurance, engage legal for SEC/breach notification assessment',
             desc: 'Full recovery protocol: law enforcement report, insurance claim, legal review of notification obligations.',
             quality: 'good',
             score: { time: 5, containment: 5, evidence: 10, thoroughness: 20 },
-            outcome: 'IC3 complaint filed with all IOCs — FBI opens a case and links it to a known West African BEC ring. Cyber insurance carrier notified within policy window — claim is accepted. Legal counsel determines SEC notification required due to M&A data exposure and drafts the filing. State breach notification letters prepared for affected individuals.',
+            // An IC3 filing inside 72h engages the FBI Recovery Asset Team, which can
+            // freeze funds still sitting at an intermediary bank.
+            sets: f => ({
+              legalEngaged: true,
+              ceoDisabled: false,
+              mfaBackdoor: false,
+              wireRecovered: f.wireRecovered + (f.recallFiled ? 0 : 60000),
+            }),
+            outcome: f => (f.ceoDisabled ? 'The CEO account is re-enabled with a new password, fresh MFA enrollment and his old security info wiped — the attacker\'s Authenticator goes with it, and the dormant forwarding rule is deleted before it can fire. ' : '')
+              + 'IC3 complaint filed with all IOCs — FBI opens a case and links it to a known West African BEC ring. '
+              + (f.recallFiled ? '' : 'Because the filing lands inside 72 hours, the FBI\'s Recovery Asset Team freezes $60,000 still sitting at an intermediary bank — the first money anyone has clawed back. ')
+              + 'Cyber insurance carrier notified within policy window — claim is accepted. Legal counsel determines SEC notification required due to M&A data exposure and drafts the filing.',
           },
           {
             key: 'B',
@@ -1736,47 +1905,69 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Handle the financial recovery channels. Let the client handle legal.',
             quality: 'partial',
             score: { time: 10, containment: 0, evidence: 5, thoroughness: 5 },
-            outcome: 'IC3 filed and insurance notified — good. But without prompting legal review, the client misses the 4-day SEC filing window for material cyber incidents. The SEC later questions the delayed disclosure, adding regulatory risk on top of the financial loss.',
+            sets: f => ({ wireRecovered: f.wireRecovered + (f.recallFiled ? 0 : 60000) }),
+            outcome: f => 'IC3 filed and insurance notified — good. '
+              + (f.recallFiled ? '' : 'The FBI Recovery Asset Team freezes $60,000 at an intermediary bank. ')
+              + 'But without prompting legal review, the client misses the 4-day SEC filing window for material cyber incidents. The SEC later questions the delayed disclosure, adding regulatory risk on top of the financial loss.',
           },
           {
             key: 'C',
+            when: f => f.recallFiled,
             label: 'The bank is handling the wire recall — recovery is their problem now',
             desc: 'The technical incident is resolved. Financial recovery is a banking matter.',
             quality: 'bad',
             score: { time: 15, containment: -10, evidence: -5, thoroughness: -20 },
             outcome: 'No IC3 report means law enforcement can\'t track the funds or link to known threat actors. Insurance claim filed late — carrier disputes coverage. No legal review means SEC notification obligations are missed entirely. The client\'s board is furious when they learn about the regulatory exposure months later.',
           },
+          {
+            key: 'C',
+            when: f => !f.recallFiled,
+            label: 'The wire cleared days ago — the money is gone, focus on the technical cleanup',
+            desc: 'There\'s nothing left to recover. Don\'t waste hours on paperwork.',
+            quality: 'bad',
+            score: { time: 15, containment: -10, evidence: -5, thoroughness: -20 },
+            outcome: 'It hadn\'t been days — it had been hours, and IC3 filings inside 72 hours routinely freeze funds at intermediary banks. You never find out. Insurance is notified late and disputes coverage, and no legal review means SEC notification obligations are missed entirely.',
+          },
         ],
-        siemEntries: [
+        siemEntries: f => [
           { time: '17:00', sev: 'info', text: 'Recovery phase — financial and legal workstreams' },
-          { time: '17:05', sev: 'warn', text: 'Wire recall status: pending with correspondent bank' },
+          { time: '17:05', sev: f.recallFiled ? 'warn' : 'crit', text: f.recallFiled ? 'Wire recall status: pending with correspondent bank' : 'Wire recall: NONE FILED' },
           { time: '17:10', sev: 'info', text: 'Cyber insurance notification window: 72 hours' },
         ],
       },
       { // POST-INCIDENT
         name: 'POST-INCIDENT',
+        carried: f => ((f.mfaBackdoor && !f.ceoDisabled) || !f.vpSecured) ? [{
+          text: 'You are writing the report while the attacker still has a way into Ashford\'s M365 tenant.',
+          score: { thoroughness: -10 },
+        }] : [],
         narrative: 'The incident is contained and recovery is underway. Time to document everything and ensure this doesn\'t happen again. The client\'s board wants to understand how this happened and what changes are needed.',
         evidence: {
           title: 'INCIDENT METRICS',
-          content: `<span class="log-ok">TIMELINE:</span>
-  Attack start:     Feb 15 08:33 (phishing email)
+          content: (f, st) => {
+            const vendorLoss = f.vendorFraud ? 87000 : 0;
+            return `<span class="log-ok">TIMELINE:</span>
+  Attack start:       Feb 15 08:33 (phishing email)
   Account compromise: Feb 17 02:14 (CEO credentials used)
-  BEC email sent:    Feb 18 11:48 (fraudulent wire request)
-  Wire initiated:   Feb 19 12:15 (CFO approved)
-  Detection:        Feb 19 14:22 (CEO reported)
-  Time to contain:  Varies by your response speed
+  BEC email sent:     Feb 18 11:48 (fraudulent wire request)
+  Wire initiated:     Feb 19 12:15 (CFO approved)
+  Detection:          Feb 19 14:22 (CEO reported)
+  Time on incident:   ${formatElapsed(st.elapsed)}
 
 <span class="log-warn">FINANCIAL IMPACT:</span>
   Total attempted fraud: $340,000
-  Amount recovered: Depends on triage speed
-  Investigation costs: ~$25,000 (MSSP hours)
+  Amount recovered:      ${fmtUSD(f.wireRecovered)}${vendorLoss ? `
+  Vendor payment fraud:  <span class="log-highlight">${fmtUSD(vendorLoss)}</span>` : ''}
+  Net loss:              <span class="log-highlight">${fmtUSD(340000 - f.wireRecovered + vendorLoss)}</span>
+  Investigation costs:   ~$25,000 (MSSP hours)
 
 <span class="log-warn">ROOT CAUSES:</span>
   1. No MFA on executive accounts
   2. DMARC not enforced (p=none)
   3. No external email warning banner
   4. No wire transfer verification procedure (verbal confirmation)
-  5. Security awareness training: Last conducted 18 months ago`
+  5. Security awareness training: Last conducted 18 months ago`;
+          }
         },
         choices: [
           {
@@ -1785,7 +1976,10 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Executive-ready report with attack narrative, financial summary, and 10 prioritized recommendations.',
             quality: 'good',
             score: { time: 5, containment: 5, evidence: 10, thoroughness: 25 },
-            outcome: 'Comprehensive report delivered to the board. Recommendations include: mandatory verbal verification for wire transfers >$10K, DMARC enforcement, MFA for all users, quarterly phishing simulations, and email security gateway upgrade. The board approves a $200K security improvement budget. Your MSSP secures a 2-year managed security contract.',
+            outcome: f => 'Comprehensive report delivered to the board. Recommendations include: mandatory verbal verification for wire transfers >$10K, DMARC enforcement, MFA for all users, quarterly phishing simulations, and email security gateway upgrade. The board approves a $200K security improvement budget. '
+              + (340000 - f.wireRecovered + (f.vendorFraud ? 87000 : 0) > 150000
+                ? 'But the net loss is hard to read past — the board also asks procurement to put the MSSP contract out to tender.'
+                : 'Your MSSP secures a 2-year managed security contract.'),
           },
           {
             key: 'B',
@@ -3596,6 +3790,8 @@ const STATE = {
   elapsed: 0,
   notes: [],
   choices: [],
+  flags: {},
+  carried: [],
   started: false,
   awaitingContinue: false,
 };
@@ -3618,6 +3814,18 @@ function shuffle(arr) {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+// Scenario fields may be a plain value or a function of the run's state:
+// (flags, state) => value. That is how a scenario reacts to earlier choices.
+// Choices set flags via `sets`, can be hidden with `when`, and each phase may
+// list `carried` consequences, shown above the briefing and scored on entry.
+function resolve(v) {
+  return typeof v === 'function' ? v(STATE.flags, STATE) : v;
+}
+
+function fmtUSD(n) {
+  return '$' + Math.round(n).toLocaleString('en-US');
 }
 
 function formatElapsed(mins) {
@@ -3699,33 +3907,54 @@ function renderPhase() {
   $('phase-progress-bar').setAttribute('aria-valuenow', progressPct);
   $('hdr-elapsed').textContent = formatElapsed(STATE.elapsed);
 
+  // Consequences of earlier decisions that reach this phase — scored once, on entry
+  const carried = (resolve(phase.carried) || []).map(c => ({ ...c, phase: phase.name }));
+  carried.forEach(c => {
+    Object.entries(c.score || {}).forEach(([k, v]) => { STATE.scores[k] += v; });
+    STATE.carried.push(c);
+  });
+  const carriedHtml = carried.length ? `
+    <div class="carried-box">
+      <div class="carried-title">CARRIED FORWARD — CONSEQUENCES OF EARLIER DECISIONS</div>
+      ${carried.map(c => {
+        const pts = Object.entries(c.score || {}).filter(([, v]) => v)
+          .map(([k, v]) => `<span class="${v > 0 ? 'pos' : 'neg'}">${k.toUpperCase()} ${v > 0 ? '+' : ''}${v}</span>`).join(' ');
+        return `<div class="carried-item ${c.sev || 'bad'}">${escapeHtml(c.text)}${pts ? ` <span class="carried-score">${pts}</span>` : ''}</div>`;
+      }).join('')}
+    </div>` : '';
+
+  const evidence = resolve(phase.evidence);
+  const visible = phase.choices.map((c, i) => ({ ...c, origIdx: i })).filter(c => !c.when || c.when(STATE.flags, STATE));
+
   body.innerHTML = `
+    ${carriedHtml}
     <div class="narrative-box">
       <div class="narrator">SITUATION BRIEFING — ${escapeHtml(phase.name)}</div>
-      ${escapeHtml(phase.narrative)}
+      ${escapeHtml(resolve(phase.narrative))}
     </div>
     <div class="evidence-box">
-      <div class="ev-title">${escapeHtml(phase.evidence.title)}</div>
-      <pre>${phase.evidence.content}</pre>
+      <div class="ev-title">${escapeHtml(resolve(evidence.title))}</div>
+      <pre>${resolve(evidence.content)}</pre>
     </div>
     <div class="section-title" style="margin-top:12px;">SELECT YOUR RESPONSE</div>
     <div class="choices-container" id="choices-container" role="group" aria-label="Response choices">
-      ${shuffle(phase.choices.map((c, i) => ({ ...c, origIdx: i })))
+      ${shuffle(visible)
         .map((c, displayIdx) => {
           const keys = ['A','B','C'];
           return `<button class="choice-btn" data-idx="${c.origIdx}" onclick="selectChoice(${c.origIdx})">
           <span class="choice-key">[${keys[displayIdx]}]</span>
-          <span class="choice-label">${escapeHtml(c.label)}</span>
-          <span class="choice-desc">${escapeHtml(c.desc)}</span>
+          <span class="choice-label">${escapeHtml(resolve(c.label))}</span>
+          <span class="choice-desc">${escapeHtml(resolve(c.desc))}</span>
         </button>`;
         }).join('')}
     </div>
     <div id="outcome-area" aria-live="polite"></div>
   `;
+  body.scrollTop = 0; // new phase starts at the top, where carried consequences sit
 
   // Add SIEM entries for this phase
-  phase.siemEntries.forEach((e, i) => {
-    setTimeout(() => addSiemEntry(e.time, e.sev, e.text), i * 400);
+  resolve(phase.siemEntries).forEach((e, i) => {
+    setTimeout(() => addSiemEntry(e.time, e.sev, resolve(e.text)), i * 400);
   });
 
   renderScoreTracker();
@@ -3738,7 +3967,16 @@ function selectChoice(idx) {
   STATE.awaitingContinue = true;
 
   const phase = STATE.incident.phases[STATE.phaseIdx];
-  const choice = phase.choices[idx];
+  // Resolve every field against the flags as they stood when the choice was made
+  const raw = phase.choices[idx];
+  const choice = {
+    key: raw.key,
+    label: resolve(raw.label),
+    quality: resolve(raw.quality),
+    score: resolve(raw.score),
+    outcome: resolve(raw.outcome),
+  };
+  Object.assign(STATE.flags, resolve(raw.sets) || {});
 
   // Apply scores
   Object.keys(choice.score).forEach(k => {
@@ -3844,6 +4082,7 @@ function endGame() {
     <div class="sc-row"><span>Incident</span><span class="sc-val">${escapeHtml(STATE.incident.title)}</span></div>
     <div class="sc-row"><span>Client</span><span class="sc-val">${escapeHtml(STATE.incident.client)}</span></div>
     <div class="sc-row"><span>Total Elapsed</span><span class="sc-val">${formatElapsed(STATE.elapsed)}</span></div>
+    ${(resolve(STATE.incident.debrief) || []).map(([k, v]) => `<div class="sc-row"><span>${escapeHtml(k)}</span><span class="sc-val">${escapeHtml(v)}</span></div>`).join('')}
     <div class="sc-section">SCORING BREAKDOWN</div>
     <div class="sc-row"><span>Response Time</span><span class="${scoreColor(s.time)}">${s.time > 0 ? '+' : ''}${s.time}</span></div>
     <div class="sc-row"><span>Containment</span><span class="${scoreColor(s.containment)}">${s.containment > 0 ? '+' : ''}${s.containment}</span></div>
@@ -3869,7 +4108,10 @@ function endGame() {
     const color = { good: 'var(--green)', partial: 'var(--amber)', bad: 'var(--red)' }[c.quality];
     return `<span style="color:${color}">${icon} ${c.phase}</span>`;
   }).join(' → ');
-  debrief.innerHTML = `<div class="end-debrief-header">PHASE DECISIONS</div>${phases}`;
+  const consequences = STATE.carried.length ? `
+    <div class="end-debrief-header" style="margin-top:12px;">CONSEQUENCES THAT CARRIED FORWARD</div>
+    <div class="end-carried">${STATE.carried.map(c => `<div class="carried-item ${c.sev || 'bad'}"><span class="note-phase">[${escapeHtml(c.phase)}]</span> ${escapeHtml(c.text)}</div>`).join('')}</div>` : '';
+  debrief.innerHTML = `<div class="end-debrief-header">PHASE DECISIONS</div>${phases}${consequences}`;
 
   $('end-screen').classList.add('visible');
   // Focus management: move focus to the end screen for accessibility
@@ -3914,6 +4156,8 @@ function startGame() {
   STATE.elapsed = 0;
   STATE.notes = [];
   STATE.choices = [];
+  STATE.flags = { ...(STATE.incident.initialFlags || {}) };
+  STATE.carried = [];
   STATE.started = true;
 
   // Update header

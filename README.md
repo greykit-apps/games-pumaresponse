@@ -8,7 +8,7 @@ PumaResponse is an incident response training simulator that puts you in the sea
 
 An interactive, browser-based simulator where you work through the six phases of incident response — **Triage, Containment, Investigation, Eradication, Recovery, and Post-Incident** — making branching decisions that are scored on response time, containment effectiveness, evidence preservation, and thoroughness.
 
-Each playthrough randomly assigns one of seven real-world incident scenarios. You read situation briefings, examine forensic evidence and SIEM logs, and choose from three response options per phase. Your decisions cascade — early mistakes make later phases harder.
+Each playthrough randomly assigns one of seven real-world incident scenarios. You read situation briefings, examine forensic evidence and SIEM logs, and choose from three response options per phase. In the BEC scenario your decisions cascade: early choices change what later phases show, which options exist, and what they cost, and consequences carry forward into the debrief. The other six scenarios still score each phase independently.
 
 ![Triage phase — reading evidence and selecting a response](screenshots/triage.png)
 
