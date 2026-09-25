@@ -20,6 +20,13 @@ function insiderLeak(f, t) {
 function insiderNum(n) {
   return Math.round(n).toLocaleString('en-US');
 }
+// Wall-clock stamp m minutes after the 11:30 handoff; carries the date past midnight (Mar 1)
+function insStamp(m) {
+  const t = 11 * 60 + 30 + Math.floor(m);
+  const day = Math.floor(t / 1440);
+  const hhmm = `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  return day ? `Mar ${1 + day} ${hhmm}` : hhmm;
+}
 // A DDTC disclosure is complete only if it can say which files and who received them
 function insiderDdtcFull(f) {
   return f.scope >= 1 && !!f.saw_foreignRecipient;
@@ -64,18 +71,18 @@ registerIncident(
     client: 'Pinnacle Aerospace',
     severity: 'HIGH',
     sevClass: 'high',
-    ticketId: 'IR-2024-0756',
+    ticketId: 'IR-2024-0956',
     // In-world "today": dates in this file are written relative to it and
     // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
     baseDate: '2024-03-01',
-    assignedTime: '11:30 UTC',
-    summary: 'DLP alert triggered by departing senior engineer uploading proprietary avionics designs to personal cloud storage. Employee gave 2-week notice yesterday. Access to classified defense contractor files detected.',
+    assignedTime: '11:30 ET',
+    summary: 'DLP alert triggered by departing senior engineer uploading proprietary avionics designs to personal cloud storage. Employee gave 2-week notice yesterday. Bulk access to ITAR-controlled technical data detected.',
     iocs: [
       { type: 'USER', val: 'mreeves — Senior Avionics Engineer (notice period)' },
       { type: 'DOMAIN', val: 'drive.google.com — personal Google Drive uploads' },
       { type: 'DOMAIN', val: 'mega.nz — encrypted file transfers detected' },
       { type: 'USB', val: 'SanDisk Ultra 256GB — connected to ENGR-WS-12' },
-      { type: 'FILE', val: '*.itar, *.cdrl — export-controlled technical data' },
+      { type: 'FILE', val: 'ITAR-marked drawings and CDRL deliverables (.pdf, .step, .dwg)' },
     ],
     // Run state. Every later phase reads these; choices change them via `sets`.
     initialFlags: {
@@ -100,6 +107,7 @@ registerIncident(
       recipientMapped: false, // every ITAR file mapped to USML paragraph and to its foreign recipient
       ddtc: '',               // '' | 'full' | 'initial' | 'late' | 'directed'
       deviceExam: false,      // his devices produced to a neutral forensic examiner (civil)
+      triagedAt: 0,           // wall-clock minute (since handoff) the Triage action landed
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
@@ -150,7 +158,7 @@ registerIncident(
 <span class="log-warn">[Yesterday 22:40]</span> AV: ENGR-WS-12 — definitions updated, scan clean
 <span class="log-warn">[Yesterday 23:01]</span> <span class="log-highlight">DLP ALERT</span> Cloud upload: drive.google.com
   Account: mreeves@gmail.com — 28 files, 890 MB<!--f:gdrive-->
-  File types: .pdf, .step, .itar<!--f:gdrive-->
+  File types: .pdf, .step, .dwg<!--f:gdrive-->
 <span class="log-warn">[Yesterday 23:18]</span> Badge-out: mreeves — Building C<!--f:afterHours-->
 <span class="log-warn">[Today 02:30]</span> <span class="log-highlight">DLP ALERT</span> Cloud upload: mega.nz (via VPN, home)
   Account: m.reeves.avx@proton.me<!--f:mega-->
@@ -168,7 +176,7 @@ registerIncident(
             desc: 'Covert evidence preservation. Don\'t tip off the employee. Work with legal to establish proper chain of custody for potential prosecution.',
             quality: 'good',
             score: { time: 10, containment: 10, evidence: 25, thoroughness: 15 },
-            sets: (f, st) => ({ custody: true, hrLegal: true, itarFiles: f.itarFiles + insiderLeak(f, st.phaseClock) }),
+            sets: (f, st) => ({ triagedAt: st.elapsed, custody: true, hrLegal: true, itarFiles: f.itarFiles + insiderLeak(f, st.phaseClock) }),
             outcome: (f, st) => {
               const n = insiderLeak(f, st.phaseClock);
               return 'DLP logs preserved with timestamps. Legal counsel engaged for ITAR violation assessment and approves covert monitoring under the consent banner in Pinnacle\'s acceptable-use policy. HR confirms the employee is joining Zhentian Dynamics, a known competitor with foreign ownership. You coordinate with Pinnacle\'s Insider Threat Program Senior Official — a role the facility clearance requires, with no analytics behind it — to begin covert monitoring. Evidence chain of custody established per federal litigation requirements.'
@@ -182,6 +190,7 @@ registerIncident(
             quality: 'partial',
             score: { time: 15, containment: 15, evidence: -10, thoroughness: 0 },
             sets: (f, st) => ({
+              triagedAt: st.elapsed,
               accessCut: true, subjectAlerted: true, alertedAt: f.alertedAt || 'TRIAGE', evidenceDestroyed: true,
               itarFiles: f.itarFiles + insiderLeak(f, st.phaseClock),
             }),
@@ -198,6 +207,7 @@ registerIncident(
             quality: 'bad',
             score: { time: -15, containment: -20, evidence: -15, thoroughness: -10 },
             sets: (f, st) => ({
+              triagedAt: st.elapsed,
               subjectAlerted: true, alertedAt: f.alertedAt || 'TRIAGE', evidenceDestroyed: true,
               itarFiles: f.itarFiles + insiderLeak(f, st.phaseClock),
             }),
@@ -220,6 +230,8 @@ registerIncident(
       },
       { // CONTAINMENT
         name: 'CONTAINMENT',
+        // The monitoring below has to happen before you read it
+        at: f => f.triagedAt + (f.accessCut ? 50 : 65),
         narrative: f => {
           if (f.accessCut) return 'Marcus is locked out, and he knows it. Within twenty minutes of the lockout his Google Drive uploads were gone, and he told HR the USB drive held "personal photos, already reformatted." Legal counsel confirms this is potentially an ITAR violation (federal crime) and recommends involving the FBI. What already left is beyond your systems; what is left to contain are the gaps in the lockout — and his status as an employee, which runs through HR, not the MSSP.';
           if (f.subjectAlerted) return 'After the conversation Marcus went back to his desk. He still has every access he had this morning, and he now knows he is being watched. Legal counsel confirms this is potentially an ITAR violation (federal crime) and recommends involving the FBI. You need to contain the data loss without destroying what is left of the legal case.';
@@ -227,18 +239,18 @@ registerIncident(
         },
         evidence: f => f.accessCut ? {
           title: 'POST-LOCKOUT TELEMETRY',
-          content: `<span class="log-warn">[11:36]</span> Print release: mreeves at BLDG-C-PRINTER-02<!--f:printJob-->
+          content: `<span class="log-warn">[${insStamp(f.triagedAt)}]</span> Print release: mreeves at BLDG-C-PRINTER-02<!--f:printJob-->
   Document: UAV_nav_architecture.pdf (38 pages, ITAR)<!--f:printJob-->
-<span class="log-ok">[11:41]</span> AD: mreeves — account disabled, sessions revoked
-<span class="log-warn">[11:44]</span> Badge: mreeves — DENIED at Building C turnstile
-<span class="log-warn">[11:49]</span> Facilities: mreeves escorted to lobby — backpack not inspected
-<span class="log-warn">[11:52]</span> Entra ID: sign-in blocked — mreeves from 73.162.48.19 (residential)<!--f:homeIp-->
-<span class="log-warn">[11:58]</span> Teams: jpatel → eng-leads "anyone know why Marcus left?"
-<span class="log-warn">[12:06]</span> Exchange: message for mreeves delivered<!--f:fwdRule-->
+<span class="log-ok">[${insStamp(f.triagedAt + 5)}]</span> AD: mreeves — account disabled, sessions revoked
+<span class="log-warn">[${insStamp(f.triagedAt + 8)}]</span> Badge: mreeves — DENIED at Building C turnstile
+<span class="log-warn">[${insStamp(f.triagedAt + 13)}]</span> Facilities: mreeves escorted to lobby — backpack not inspected
+<span class="log-warn">[${insStamp(f.triagedAt + 16)}]</span> Entra ID: sign-in blocked — mreeves from 73.162.48.19 (residential)<!--f:homeIp-->
+<span class="log-warn">[${insStamp(f.triagedAt + 22)}]</span> Teams: jpatel → eng-leads "anyone know why Marcus left?"
+<span class="log-warn">[${insStamp(f.triagedAt + 30)}]</span> Exchange: message for mreeves delivered<!--f:fwdRule-->
   Inbox rule "ref" — forwarded to mreeves@gmail.com<!--f:fwdRule-->
-<span class="log-warn">[12:11]</span> Proxy: jpatel → confluence.pinnacle.local (AVX handover page)
-<span class="log-warn">[12:15]</span> ENGR-WS-12: screen locked, idle — no logon since 11:41
-<span class="log-warn">[12:18]</span> Entra ID: sign-in blocked — mreeves from 73.162.48.19<!--f:homeIp-->
+<span class="log-warn">[${insStamp(f.triagedAt + 35)}]</span> Proxy: jpatel → confluence.pinnacle.local (AVX handover page)
+<span class="log-warn">[${insStamp(f.triagedAt + 39)}]</span> ENGR-WS-12: screen locked, idle — no logon since ${insStamp(f.triagedAt + 5)}
+<span class="log-warn">[${insStamp(f.triagedAt + 42)}]</span> Entra ID: sign-in blocked — mreeves from 73.162.48.19<!--f:homeIp-->
 
 <span class="log-ok">── LEGAL GUIDANCE ──</span>
   - ITAR violations: penalties up to $1M per violation + 20 years
@@ -247,21 +259,21 @@ registerIncident(
   - Employee retains some rights during notice period`
         } : {
           title: 'CONTINUED ACTIVITY MONITORING',
-          content: `<span class="log-warn">[11:45]</span> mreeves accessing \\\\pinnacle-fs\\ITAR\\UAV_Guidance\\<!--f:uavGuidance-->
+          content: `<span class="log-warn">[${insStamp(f.triagedAt + 15)}]</span> mreeves accessing \\\\pinnacle-fs\\ITAR\\UAV_Guidance\\<!--f:uavGuidance-->
   54 additional files — 780 MB<!--f:uavGuidance-->
-<span class="log-warn">[11:47]</span> Jira: mreeves — AVX-2231 moved to "Handover"
-<span class="log-warn">[11:52]</span> <span class="log-highlight">EMAIL</span> mreeves → personal Gmail<!--f:gmailAttach-->
+<span class="log-warn">[${insStamp(f.triagedAt + 17)}]</span> Jira: mreeves — AVX-2231 moved to "Handover"
+<span class="log-warn">[${insStamp(f.triagedAt + 22)}]</span> <span class="log-highlight">EMAIL</span> mreeves → personal Gmail<!--f:gmailAttach-->
   Subject: "Reference Materials"<!--f:gmailAttach-->
   Attachment: guidance_specs_v3.pdf (ITAR-marked)<!--f:gmailAttach-->
-<span class="log-warn">[11:55]</span> Teams: mreeves → jpatel "can you cover the 2pm review?"
-<span class="log-warn">[12:01]</span> Print job: ENGR-WS-12 → BLDG-C-PRINTER-02<!--f:printJob-->
+<span class="log-warn">[${insStamp(f.triagedAt + 25)}]</span> Teams: mreeves → jpatel "can you cover the 2pm review?"
+<span class="log-warn">[${insStamp(f.triagedAt + 31)}]</span> Print job: ENGR-WS-12 → BLDG-C-PRINTER-02<!--f:printJob-->
   Document: UAV_nav_architecture.pdf (38 pages, ITAR)<!--f:printJob-->
-<span class="log-warn">[12:06]</span> Proxy: mreeves → weather.com
-<span class="log-warn">[12:10]</span> Webmail access: mreeves@gmail.com from ENGR-WS-12<!--f:gdrive-->
+<span class="log-warn">[${insStamp(f.triagedAt + 36)}]</span> Proxy: mreeves → weather.com
+<span class="log-warn">[${insStamp(f.triagedAt + 40)}]</span> Webmail access: mreeves@gmail.com from ENGR-WS-12<!--f:gdrive-->
   Uploading additional files to Google Drive<!--f:gdrive-->${f.subjectAlerted ? `
-<span class="log-warn">[12:20]</span> Process: sdelete64.exe -p 3 E:\\ (USB volume)<!--f:antiForensics-->
-<span class="log-warn">[12:22]</span> Chrome: history, cookies and cache cleared
-<span class="log-warn">[12:31]</span> Proxy (TLS-inspected): drive.google.com — 28 DELETE requests<!--f:antiForensics-->` : ''}
+<span class="log-warn">[${insStamp(f.triagedAt + 50)}]</span> Process: sdelete64.exe -p 3 E:\\ (USB volume)<!--f:antiForensics-->
+<span class="log-warn">[${insStamp(f.triagedAt + 52)}]</span> Chrome: history, cookies and cache cleared
+<span class="log-warn">[${insStamp(f.triagedAt + 61)}]</span> Proxy (TLS-inspected): drive.google.com — 28 DELETE requests<!--f:antiForensics-->` : ''}
 
 <span class="log-ok">── LEGAL GUIDANCE ──</span>
   - ITAR violations: penalties up to $1M per violation + 20 years
@@ -572,6 +584,8 @@ registerIncident(
       },
       { // ERADICATION
         name: 'ERADICATION',
+        // The warrant runs at 06:10 the next morning; two days later if the forward tipped him first
+        at: f => f.warrantSeized ? 1440 - 150 : f.alertedAt === 'INVESTIGATION' && f.fbiEarly ? 3 * 1440 - 150 : 0,
         carried: f => {
           const out = [];
           if (f.warrantSeized) out.push({
@@ -607,7 +621,7 @@ registerIncident(
   - Badge access: Buildings A, B, C, Engineering Lab, Server Room${f.accessCut ? ' (building entry suspended; lab and server-room grants still provisioned)' : ''}
   - VPN: Full tunnel access to engineering network
   - Cloud: Confluence, Jira, SharePoint, OneDrive (corporate)
-  - Source control: GitLab — 14 repositories (3 ITAR-classified), personal access token valid
+  - Source control: GitLab — 14 repositories (3 holding ITAR technical data), personal access token valid
   - AWS: IAM user (not federated to AD) — dev environment, access keys active
 
 <span class="log-highlight">SHARED CREDENTIALS:</span>
@@ -646,7 +660,7 @@ registerIncident(
             sets: f => ({ accessCut: true, fwdActive: f.fwdActive && !f.saw_fwdRule }),
             outcome: f => 'Primary access disabled. '
               + (f.fwdActive && !f.saw_fwdRule
-                ? 'But the email forwarding rule continues sending copies of engineering team emails to his personal Gmail for 3 more days until someone notices. '
+                ? 'But the email forwarding rule continues sending copies of engineering team emails to his personal Gmail until someone notices. '
                 : f.fwdActive ? 'The forwarding rule you documented goes on the same change ticket and is deleted. ' : '')
               + 'Shared credentials aren\'t rotated — if the employee memorized them, he could still access lab equipment or the engineering VLAN from the parking lot.',
           },
@@ -659,7 +673,7 @@ registerIncident(
             sets: f => ({ accessCut: true, fwdActive: f.fwdActive && !f.saw_fwdRule, parkingLot: true, itarFiles: f.itarFiles + 85 }),
             outcome: f => 'AD disabled but everything else stays active. '
               + (f.fwdActive && !f.saw_fwdRule
-                ? 'The email forwarding rule sends 2 weeks of engineering team communications to his personal Gmail — including discussions about the incident investigation itself. '
+                ? 'The email forwarding rule keeps sending engineering team communications to his personal Gmail — including discussions about the incident investigation itself. '
                 : '')
               + 'He connects to the engineering Wi-Fi from the parking lot using the shared key and accesses a lab workstation with a shared PIN. 85 more ITAR files are exfiltrated before anyone notices.',
           },
@@ -676,14 +690,16 @@ registerIncident(
       },
       { // RECOVERY
         name: 'RECOVERY',
+        // What eradication left running gets a day to do its damage
+        at: (f, st) => (f.fwdActive || f.parkingLot) ? st.elapsed + 1440 : 0,
         carried: f => {
           const out = [];
           if (f.fwdActive) out.push({
-            text: 'The forwarding rule ran for days after eradication, delivering engineering-team mail to his Gmail — including a thread about the investigation itself.',
+            text: 'The forwarding rule has run for a full day since eradication, delivering engineering-team mail to his Gmail — including a thread about the investigation itself.',
             score: { containment: -10 },
           });
           if (f.parkingLot) out.push({
-            text: 'Wi-Fi controller logs show his personal laptop on the engineering VLAN from the parking lot, using the shared key. 85 more ITAR files went out through a lab workstation with a shared PIN.',
+            text: 'Overnight the Wi-Fi controller logged his personal laptop on the engineering VLAN from the parking lot, using the shared key. 85 more ITAR files went out through a lab workstation with a shared PIN.',
             score: { containment: -10 },
           });
           if (!f.credsRotated && !f.parkingLot) out.push({
@@ -695,13 +711,13 @@ registerIncident(
         narrative: f => (f.fwdActive || f.parkingLot || !f.credsRotated
           ? 'The insider\'s primary access is revoked, though not every door is shut. '
           : 'The insider\'s access is fully revoked. ')
-          + 'Now Pinnacle needs to assess the damage, protect their competitive position, and ensure their DoD contract compliance. DCIS (Defense Criminal Investigative Service) is involved given the ITAR implications.',
+          + 'Now Pinnacle needs to assess the damage, protect their competitive position, and ensure their DoD contract compliance. HSI (Homeland Security Investigations), which leads most ITAR criminal cases, has joined the FBI; DCSA is watching the facility clearance.',
         evidence: {
           title: 'RECOVERY & COMPLIANCE STATUS',
           content: f => `<span class="log-ok">ACCESS STATUS:</span>
   - All insider accounts disabled ✓
   - Shared credentials rotated: ${f.credsRotated ? '✓' : '<span class="log-highlight">NO ✗</span>'}
-  - Mail forwarding to personal Gmail: ${f.fwdActive ? '<span class="log-highlight">RAN FOR DAYS ✗</span>' : 'removed ✓'}
+  - Mail forwarding to personal Gmail: ${f.fwdActive ? '<span class="log-highlight">STILL RUNNING ✗</span>' : 'removed ✓'}
 
 <span class="log-warn">COMPETITIVE DAMAGE:</span>
   - ITAR-controlled files exfiltrated: ${insiderNum(f.itarFiles)}
