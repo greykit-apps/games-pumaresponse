@@ -44,7 +44,7 @@ function rwFoothold(f) {
   return out;
 }
 
-INCIDENTS.push(
+registerIncident(
   {
     id: 'RANSOMWARE',
     title: 'Ransomware Outbreak — LOCKBIT 3.0',
@@ -52,6 +52,9 @@ INCIDENTS.push(
     severity: 'CRITICAL',
     sevClass: 'high',
     ticketId: 'IR-2024-0847',
+    // In-world "today": every date in this file is written relative to it and
+    // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
+    baseDate: '2024-02-19',
     assignedTime: '03:42 UTC',
     summary: 'Multiple endpoints reporting encrypted files with .lockbit extension. Ransom note detected on 3 file servers. AD environment may be compromised.',
     iocs: [

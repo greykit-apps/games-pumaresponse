@@ -57,7 +57,7 @@ function insiderDdtcStatus(f) {
   return 'Not filed';
 }
 
-INCIDENTS.push(
+registerIncident(
   {
     id: 'INSIDER',
     title: 'Insider Threat — Data Exfiltration by Departing Employee',
@@ -65,6 +65,9 @@ INCIDENTS.push(
     severity: 'HIGH',
     sevClass: 'high',
     ticketId: 'IR-2024-0756',
+    // In-world "today": dates in this file are written relative to it and
+    // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
+    baseDate: '2024-03-01',
     assignedTime: '11:30 UTC',
     summary: 'DLP alert triggered by departing senior engineer uploading proprietary avionics designs to personal cloud storage. Employee gave 2-week notice yesterday. Access to classified defense contractor files detected.',
     iocs: [

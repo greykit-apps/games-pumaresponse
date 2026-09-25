@@ -85,7 +85,7 @@ function ddosSeal(f, T) {
   return { exfilBlockT: Math.min(f.exfilBlockT, T + 14), haltT: Math.min(f.haltT, T + 14), mgmtIsolated: true };
 }
 
-INCIDENTS.push(
+registerIncident(
   {
     id: 'DDOS_DIVERSION',
     title: 'DDoS Smokescreen — Data Theft Under Cover',
@@ -93,6 +93,9 @@ INCIDENTS.push(
     severity: 'CRITICAL',
     sevClass: 'high',
     ticketId: 'IR-2024-0634',
+    // In-world "today" (Black Friday 2024 — the scenario is set on Black Friday): dates in this file are written relative to it and
+    // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
+    baseDate: '2024-11-29',
     assignedTime: '19:08 UTC',
     summary: 'Volumetric DDoS attack on e-commerce platform (Black Friday weekend). While the SOC scrambles to mitigate, attackers exploit a SQLi vulnerability on a forgotten staging server and pivot to the POS network. Card skimming malware deployed.',
     iocs: [

@@ -39,7 +39,7 @@ function wrcDisclosure(f) {
   return `${clients}; ${vendor}`;
 }
 
-INCIDENTS.push(
+registerIncident(
   {
     id: 'WEBAPP_RCE',
     title: 'Web Application Compromise — Zero-Day RCE',
@@ -47,6 +47,9 @@ INCIDENTS.push(
     severity: 'CRITICAL',
     sevClass: 'high',
     ticketId: 'IR-2024-0988',
+    // In-world "today": every date in this file is written relative to it and
+    // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
+    baseDate: '2024-03-10',
     assignedTime: '13:55 UTC',
     summary: 'Zero-day deserialization vulnerability in client portal (Java-based). Attacker achieved remote code execution, deployed webshell, and is actively dumping the case management database containing privileged attorney-client communications.',
     iocs: [

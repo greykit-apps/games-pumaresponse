@@ -34,7 +34,7 @@ function scNotifyStatus(f, how) {
   return `Accurate — ${scN(told)} notified · HHS/OCR + media · ${timing}`;
 }
 
-INCIDENTS.push(
+registerIncident(
   {
     id: 'SUPPLY_CHAIN',
     title: 'Supply Chain Compromise — Backdoored Software Update',
@@ -42,6 +42,9 @@ INCIDENTS.push(
     severity: 'CRITICAL',
     sevClass: 'high',
     ticketId: 'IR-2024-1102',
+    // In-world "today": every date in this file is written relative to it and
+    // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
+    baseDate: '2024-03-15',
     assignedTime: '09:15 UTC',
     summary: 'Trusted IT monitoring agent (NetPulse RMM) pushed backdoored update to 340+ endpoints. Beacon traffic detected to unknown C2. Patient data systems potentially accessed.',
     iocs: [

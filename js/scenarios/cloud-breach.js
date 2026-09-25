@@ -65,7 +65,7 @@ function cbPciStatus(f) {
   return 'PFI engaged, scope accepted — revalidation pending';
 }
 
-INCIDENTS.push(
+registerIncident(
   {
     id: 'CLOUD_BREACH',
     title: 'Cloud Infrastructure Breach — AWS Credential Compromise',
@@ -73,6 +73,9 @@ INCIDENTS.push(
     severity: 'CRITICAL',
     sevClass: 'high',
     ticketId: 'IR-2024-1231',
+    // In-world "today": every date in this file is written relative to it and
+    // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
+    baseDate: '2024-03-20',
     assignedTime: '06:45 UTC',
     summary: 'AWS access keys leaked in public GitHub repo. Attacker created new IAM users, spun up crypto miners, and accessed RDS databases containing payment card data. CloudTrail shows privilege escalation to admin.',
     iocs: [

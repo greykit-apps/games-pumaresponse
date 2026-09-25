@@ -8,7 +8,7 @@ function becWireMoved(t) {
   return BEC_WIRE_MOVED.filter(([at]) => t >= at).pop()[1];
 }
 
-INCIDENTS.push(
+registerIncident(
   {
     id: 'BEC',
     title: 'Business Email Compromise — CEO Fraud',
@@ -16,6 +16,9 @@ INCIDENTS.push(
     severity: 'HIGH',
     sevClass: 'high',
     ticketId: 'IR-2024-0913',
+    // In-world "today": every date in this file is written relative to it and
+    // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
+    baseDate: '2024-02-19',
     assignedTime: '14:22 UTC',
     summary: 'CFO received urgent wire transfer request appearing to come from CEO. $340,000 wire initiated to unknown offshore account. Email authentication investigation needed.',
     iocs: [

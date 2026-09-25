@@ -131,7 +131,7 @@ pumaresponse/
 │   └── style.css
 ├── js/
 │   ├── game.js         # Engine: rendering, tagging, clock, scoring, menus
-│   └── scenarios/      # One file per incident, each calling INCIDENTS.push({...})
+│   └── scenarios/      # One file per incident, each calling registerIncident({...})
 │       ├── ransomware.js, bec.js, supply-chain.js, insider.js,
 │       └── cloud-breach.js, ddos-diversion.js, webapp-rce.js
 ├── tools/
@@ -147,7 +147,7 @@ pumaresponse/
 
 ## Development
 
-Each scenario lives in its own file under `js/scenarios/` and registers itself with `INCIDENTS.push({...})`; the `<script>` order in `index.html` is the order scenarios appear in the menu. To add one, write a new file and add its `<script>` tag after the others. Any field can be a plain value or a function of the run's state, which is how later phases react to earlier choices. The mechanics are documented where they're implemented in `js/game.js` — search for `EVIDENCE TAGGING` and `DECISION CLOCK`.
+Each scenario lives in its own file under `js/scenarios/` and registers itself with `INCIDENTS.push({...})`; the `<script>` order in `index.html` is the order scenarios appear in the menu. To add one, write a new file and add its `<script>` tag after the others. Scenarios register with `registerIncident({...})` and must declare a `baseDate` (the in-world "today"). Write dates relative to it (`Feb 17` two days before a `2024-02-19` base) and the game shows them relative to the real date, so the incident is always happening today. CVE years and times of day are never shifted. Any field can be a plain value or a function of the run's state, which is how later phases react to earlier choices. The mechanics are documented where they're implemented in `js/game.js` — search for `EVIDENCE TAGGING` and `DECISION CLOCK`.
 
 After changing a scenario, check it with the harness. Serve the repo (`python3 -m http.server 8000`), open the game, and in the browser console:
 

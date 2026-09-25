@@ -73,6 +73,60 @@ setTimeout(runBoot, 400);
 // in menu order). Nothing below reads INCIDENTS until the player starts a game.
 const INCIDENTS = [];
 
+// ── REAL-DATE ANCHORING ─────────────────────────────
+// Scenarios are written against a fixed in-world "today" (incident.baseDate,
+// 'YYYY-MM-DD'). On registration every string in the scenario, and every string a
+// scenario function returns, is shifted so that date becomes the real today:
+// "Feb 17" written two days before a Feb 19 baseDate always reads as two days ago.
+// Shifted: "Feb 17" dates, "Thu, 19 Feb 2024" / "19 Feb 2024" (weekday recomputed),
+// years 2010-2029 (except CVE IDs, which are real), and quarters Q1-Q4.
+// Times of day are untouched. Every scenario must declare a baseDate.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DATE_RE = new RegExp(
+  `(?:\\b(${WEEKDAYS.join('|')}), )?\\b(\\d{1,2}) (${MONTHS.join('|')}) (\\d{4})\\b`   // [Thu, ]19 Feb 2024
+  + `|\\b(${MONTHS.join('|')}) (\\d{1,2})\\b(?!,? ?\\d{4})`                              // Feb 17
+  + `|(?<!CVE-)\\b(20[12]\\d)\\b`                                                      // 2024
+  + `|\\bQ([1-4])\\b`, 'g');                                                        // Q4
+
+function makeDateShifter(baseDate) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const base = new Date(baseDate + 'T00:00:00');
+  const dayMs = 86400000;
+  const shift = d => new Date(d.getTime() + Math.round((today - base) / dayMs) * dayMs);
+  const years = today.getFullYear() - base.getFullYear();
+  const quarters = years * 4 + Math.floor(today.getMonth() / 3) - Math.floor(base.getMonth() / 3);
+  // "Dec 28" in a scenario based in February means last December
+  const inBaseYear = (mon, day) => {
+    const d = new Date(base.getFullYear(), MONTHS.indexOf(mon), +day);
+    if (d - base > 183 * dayMs) d.setFullYear(d.getFullYear() - 1);
+    return d;
+  };
+  return str => str.replace(DATE_RE, (m, wd, dd, mon, yyyy, mon2, dd2, year, q) => {
+    if (mon) {
+      const d = shift(new Date(+yyyy, MONTHS.indexOf(mon), +dd));
+      return `${wd ? WEEKDAYS[d.getDay()] + ', ' : ''}${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    }
+    if (mon2) { const d = shift(inBaseYear(mon2, dd2)); return `${MONTHS[d.getMonth()]} ${d.getDate()}`; }
+    if (year) return String(+year + years);
+    return 'Q' + ((((+q - 1 + quarters) % 4) + 4) % 4 + 1);
+  });
+}
+
+function anchorDeep(v, fix) {
+  if (typeof v === 'string') return fix(v);
+  if (typeof v === 'function') return (...args) => anchorDeep(v(...args), fix);
+  if (Array.isArray(v)) return v.map(x => anchorDeep(x, fix));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, anchorDeep(x, fix)]));
+  return v;
+}
+
+function registerIncident(incident) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(incident.baseDate || '')) throw new Error(`${incident.id}: baseDate 'YYYY-MM-DD' is required`);
+  INCIDENTS.push(anchorDeep(incident, makeDateShifter(incident.baseDate)));
+}
+
 // ── GAME STATE ─────────────────────────────────────
 const STATE = {
   incident: null,
