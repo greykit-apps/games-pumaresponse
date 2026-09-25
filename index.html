@@ -847,10 +847,15 @@ body::after {
   background: var(--backdrop-dark);
   z-index: var(--z-overlay);
   align-items: center;
-  justify-content: center;
+  /* Centred when it fits, top-aligned and scrollable when the debrief is taller
+     than the screen (justify-content: center would push both ends off-screen) */
+  justify-content: flex-start;
+  overflow-y: auto;
   flex-direction: column;
   padding: 20px;
 }
+#end-screen > :first-child { margin-top: auto; }
+#end-screen > :last-child { margin-bottom: auto; }
 #end-screen.visible { display: flex; }
 
 @keyframes overlay-in {
@@ -7398,7 +7403,9 @@ function endGame() {
 
   $('end-screen').classList.add('visible');
   // Focus management: move focus to the end screen for accessibility
-  $('replay-incident-btn').focus();
+  // Focus the first action without scrolling to it: the player should land on their grade
+  $('replay-incident-btn').focus({ preventScroll: true });
+  $('end-screen').scrollTop = 0;
 }
 
 // ── KEYBOARD CONTROLS ──────────────────────────────
