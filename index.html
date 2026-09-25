@@ -476,7 +476,14 @@ body::after {
   margin: 2px 0;
 }
 .ioc-item .ioc-type { color: var(--amber); font-size: 11px; letter-spacing: 1px; }
-.ioc-item .ioc-val { color: var(--green); font-size: 12px; word-break: break-all; }
+.ioc-item .ioc-val {
+  color: var(--green);
+  font-size: 12px;
+  /* Break between words; split a token only if it can't fit a line on its own
+     (hashes, URLs). "pretty" rebalances the last lines so none is a stub. */
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
 
 /* IR Phase tracker */
 .ir-phases {
@@ -6829,6 +6836,12 @@ function renderNotes() {
 }
 
 // ── RENDER INCIDENT BRIEF ──────────────────────────
+// Offer natural break points inside long indicators: before "@" in addresses and
+// after "/" in paths/URLs, so they split at a seam instead of mid-token.
+function iocBreaks(html) {
+  return html.replace(/(\S{12,})/g, tok => tok.replace(/@/g, '<wbr>@').replace(/\//g, '/<wbr>'));
+}
+
 function renderBrief() {
   const inc = STATE.incident;
   const brief = $('incident-brief');
@@ -6843,7 +6856,7 @@ function renderBrief() {
     <div class="section-title">SUMMARY</div>
     <div class="brief-summary">${escapeHtml(inc.summary)}</div>
     <div class="section-title">INDICATORS OF COMPROMISE</div>
-    <div class="ioc-list">${inc.iocs.map(i => `<div class="ioc-item"><div class="ioc-type">${escapeHtml(i.type)}</div><div class="ioc-val">${escapeHtml(i.val)}</div></div>`).join('')}</div>
+    <div class="ioc-list">${inc.iocs.map(i => `<div class="ioc-item"><div class="ioc-type">${escapeHtml(i.type)}</div><div class="ioc-val">${iocBreaks(escapeHtml(i.val))}</div></div>`).join('')}</div>
     <div class="score-tracker" id="score-tracker"></div>
   `;
   renderScoreTracker();
