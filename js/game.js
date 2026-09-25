@@ -1020,11 +1020,8 @@ $('about-modal').addEventListener('keydown', (e) => {
 // pointing at it. Steps whose area isn't on screen right now are skipped. On
 // phones the tour switches to the panel it is describing. The clock is stopped
 // while the tour is open (clockRunning), and game keys are ignored.
+// Each step: the area to light, a title, an optional key line (highlighted), and the body
 const HELP_STEPS = [
-  { el: () => $('header'), title: 'INCIDENT HEADER',
-    body: 'The ticket, its severity, and the time elapsed on the incident — the wall clock, which moves with the story as well as with your decisions. The phase on the right and the bar underneath show how far through the six phases you are.' },
-  { el: () => document.querySelector('.incident-meta'), panel: 'brief', title: 'INCIDENT BRIEF',
-    body: 'Who the client is, how severe this is, and when it was handed to you. The summary below it is what the SOC knew at handoff.' },
   { el: () => document.querySelector('.ioc-list'), panel: 'brief', title: 'INDICATORS OF COMPROMISE',
     body: 'What was known at handoff: hashes, IPs, domains, accounts. They are where the investigation starts, not the whole story — each phase\'s evidence turns up more.' },
   { el: () => $('score-tracker'), panel: 'brief', title: 'PERFORMANCE METRICS',
@@ -1034,7 +1031,8 @@ const HELP_STEPS = [
   { el: () => document.querySelector('#action-body .narrative-box'), panel: 'action', title: 'SITUATION BRIEFING',
     body: 'What has happened and what this phase asks of you. It is written for the path you are on, so it changes with the choices you made earlier.' },
   { el: () => document.querySelector('#action-body .evidence-box'), panel: 'action', title: 'EVIDENCE',
-    body: 'Logs and artefacts for this phase. Click a line, or use ↑ ↓ and Enter, to tag it as a finding. A real finding earns evidence points, can unlock a better response option, and strengthens your report; tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters.' },
+    key: 'Click the lines that matter. A finding can unlock a fourth response option — often the strongest move in the phase, and there is no other way to get it.',
+    body: 'Click a line, or use ↑ ↓ and Enter, to tag it as a finding. Findings also earn evidence points and strengthen your report, and some change what happens later. Tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters. You can tag before or after starting the clock.' },
   { el: () => STATE.incident && STATE.incident.clock ? ($('start-clock-btn') || $('live-strip')) : null, panel: 'action', title: 'DECISION CLOCK',
     body: () => STATE.clockMode === 'turn'
       ? 'You are playing turn-based, so there is no clock: take as long as you like. Real-time mode, in the ↺ menu, has the attacker keep moving while you decide.'
@@ -1047,11 +1045,8 @@ const HELP_STEPS = [
   { el: () => $('siem-feed-col'), panel: 'siem', title: 'SIEM FEED',
     body: 'Events as they happen, stamped on the incident\'s clock: each phase\'s alerts, what the attacker does while your clock runs, and the result of every decision. Click the panel to widen it.' },
   { el: () => $('notes-col'), panel: 'siem', title: 'ANALYST NOTES',
-    body: 'Your running log of findings, false leads and actions. Hover a note to remove it. That only tidies the log: a finding stays tagged and scored.' },
-  { el: () => $('menu-btn'), title: 'INCIDENT MENU',
-    body: 'Replay this incident, start another or choose a scenario, switch between real-time and turn-based, or reset your progress. The clock stops while it is open.' },
-  { el: () => $('help-btn'), title: 'HELP',
-    body: 'Open this tour whenever you like; the clock is stopped while it is open. ← and → step through it, Esc leaves.' },
+    key: 'Every evidence line you tag lands here as a finding. When one unlocks a response option, this log says so, and the new option appears marked ◆ UNLOCKED BY YOUR FINDING.',
+    body: 'It also records false leads and each action you take. Findings carry forward: one tagged in an early phase can unlock an option several phases later. Hover a note to remove it — that only tidies the log; the finding stays tagged and scored.' },
 ];
 let helpSteps = [], helpIdx = 0, helpReturnFocus = null, helpTab = null;
 
@@ -1128,6 +1123,7 @@ function showHelpStep(i) {
   if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   $('help-count').textContent = `HELP · ${i + 1} OF ${helpSteps.length}`;
   $('help-title').textContent = step.title;
+  $('help-key').textContent = step.key || '';
   $('help-body').textContent = resolve(step.body);
   $('help-prev').disabled = i === 0;
   $('help-next').textContent = i === helpSteps.length - 1 ? 'DONE' : 'NEXT ▸';

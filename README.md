@@ -27,7 +27,7 @@ Each playthrough assigns one of seven real-world incident scenarios, picked at r
 - **Personal bests** per scenario, remembered in your browser and shown in the ↺ scenario picker. **Reset progress** in the same menu clears bests and settings (two presses)
 - **Teaching debrief**: every finding you were shown, tagged or missed, labelled with its MITRE ATT&CK technique (linked to attack.mitre.org)
 - **Copy result**: a spoiler-free summary for sharing: grade, one coloured square per phase, findings
-- **Help tour**: the HELP button dims the screen and lights up one area at a time (IOCs, metrics, evidence, SIEM, analyst notes and the rest) with a callout explaining it. The clock is stopped while it is open
+- **Help tour**: the HELP button dims the screen and lights up one area at a time (IOCs, metrics, evidence, the clock, SIEM, analyst notes) with a callout explaining it. The clock is stopped while it is open
 - **Full keyboard support** alongside mouse/touch controls
 - **Mobile-responsive** with tab-based panel switching on smaller screens
 

@@ -352,6 +352,16 @@ body::after {
 #help-pop[data-side="top"] #help-arrow { bottom: -7px; border-bottom-color: var(--green); border-right-color: var(--green); }
 #help-count { font-size: 11px; color: var(--green-dim); letter-spacing: 1px; margin-bottom: 4px; }
 #help-title { font-size: 15px; letter-spacing: 2px; color: var(--green); text-shadow: 0 0 6px var(--green-glow-lg); margin-bottom: 8px; }
+#help-key {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--amber);
+  border-left: 2px solid var(--amber);
+  background: var(--amber-bg-dim);
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+#help-key:empty { display: none; }
 #help-body { font-size: 13px; line-height: 1.55; color: var(--green); margin-bottom: 12px; }
 .help-nav { display: flex; gap: 6px; }
 .help-nav button {
