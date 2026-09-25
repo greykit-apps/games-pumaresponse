@@ -739,7 +739,7 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
           content: (f, st) => `<span class="log-ok">INCIDENT TIMELINE:</span>
   Initial access:    Feb 14 09:12 (phishing)
   Privilege escalation: Feb 14 11:00
-  Lateral movement:  Feb 14-18 (5 days)
+  Lateral movement:  Feb 14 to Feb 18 (5 days)
   Data exfiltration:  Feb 18 02:22 onward (${f.exfilScope ? `${rwGB(f.exfilTenths)} GB` : 'volume not scoped'})
   Encryption:        Feb 19 03:01
   Detection:         Feb 19 03:01 (41 min to escalation)
