@@ -7,6 +7,14 @@ const BEC_WIRE_MOVED = [[0, 55000], [6, 100000], [12, 140000], [25, 200000], [45
 function becWireMoved(t) {
   return BEC_WIRE_MOVED.filter(([at]) => t >= at).pop()[1];
 }
+// Wall-clock stamp m minutes after the 14:22 handoff (Feb 19). The date is
+// included when asked for, or whenever the stamp has rolled past midnight.
+function becStamp(m, withDate) {
+  const t = 14 * 60 + 22 + Math.floor(m);
+  const day = Math.floor(t / 1440);
+  const hhmm = `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  return day || withDate ? `Feb ${19 + day} ${hhmm}` : hhmm;
+}
 
 registerIncident(
   {
@@ -19,13 +27,13 @@ registerIncident(
     // In-world "today": every date in this file is written relative to it and
     // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
     baseDate: '2024-02-19',
-    assignedTime: '14:22 UTC',
+    assignedTime: '14:22 ET',
     summary: 'CFO received urgent wire transfer request appearing to come from CEO. $340,000 wire initiated to unknown offshore account. Email authentication investigation needed.',
     iocs: [
       { type: 'EMAIL', val: 'ceo@ashford-mfg.com (spoofed — reply-to: ceo@ashf0rd-mfg.com)' },
       { type: 'DOMAIN', val: 'ashf0rd-mfg.com — typosquat registered 3 days ago' },
-      { type: 'IP', val: '103.145.22.87 — email origin (VPN exit node, SEA)' },
-      { type: 'EMAIL RULE', val: 'Inbox rule "Administrative" — auto-forward + delete' },
+      { type: 'IP', val: '103.145.22.87 — email origin (VPN exit node, Singapore)' },
+      { type: 'EMAIL RULE', val: 'Inbox rule "Administrative" — forwards wire/payment mail to the typosquat, hides it in RSS Feeds' },
       { type: 'ACCOUNT', val: 'CEO M365 account — suspicious sign-in from unfamiliar location' },
     ],
     // Run state. Every later phase reads these; choices change them via `sets`.
@@ -41,6 +49,8 @@ registerIncident(
       scopeAssessed: false,   // the 847 exposed emails were catalogued
       vendorFraud: false,     // VP Sales account was used to redirect vendor payments
       legalEngaged: false,    // counsel assessed SEC / breach-notification duties
+      tippedAt: 0,            // wall-clock minute (since handoff) the reply reached the attacker
+      containedAt: 0,         // wall-clock minute the Containment action landed
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
@@ -73,13 +83,13 @@ registerIncident(
     phases: [
       { // TRIAGE
         name: 'TRIAGE',
-        narrative: 'The client\'s CFO, Janet Morris, just contacted your MSSP in a panic. She approved a $340,000 wire transfer 2 hours ago based on an "urgent" email from the CEO requesting payment to a new vendor. The CEO is on vacation and says he never sent it. The wire may still be reversible if you act fast.',
+        narrative: 'The client\'s CFO, Janet Morris, just contacted your MSSP in a panic. She approved a $340,000 wire transfer 2 hours ago based on an "urgent" email from the CEO requesting payment to a new vendor. Then she found there is no purchase order behind the "acquisition", and the CEO — on vacation — isn\'t answering his phone. The wire may still be reversible if you act fast.',
         evidence: {
           title: 'SUSPICIOUS EMAIL — HEADERS EXTRACT',
           content: `<span class="log-warn">From:</span> David Chen &lt;ceo@ashford-mfg.com&gt;
 <span class="log-warn">Reply-To:</span> ceo@ashf0rd-mfg.com<!--f:replyTo-->
 <span class="log-warn">Subject:</span> URGENT — Wire Transfer Needed Today
-<span class="log-warn">Date:</span> Thu, 19 Feb 2024 11:48:00 +0000
+<span class="log-warn">Date:</span> Thu, 19 Feb 2024 11:48:00 -0500
 <span class="log-warn">X-Originating-IP:</span> 103.145.22.87<!--f:origIP-->
 
 <span class="log-ok">── EMAIL BODY ──</span>
@@ -89,8 +99,8 @@ below ASAP. This is for a time-sensitive acquisition deal. Please
 handle this personally and keep it confidential until I announce.
 I'm in meetings all day — email only please.
 
-Account: First National Bank of Cayman
-Routing: 067014822<!--f:beneficiary-->
+Bank: First National Bank of Cayman, George Town
+SWIFT: FNBCKYKY<!--f:beneficiary-->
 Account: 2847193650<!--f:beneficiary-->
 Ref: ASHFORD-ACQ-2024
 
@@ -132,7 +142,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Send the CEO an email asking if this wire request is legitimate.',
             quality: 'bad',
             score: { time: -20, containment: -20, evidence: -5, thoroughness: -10 },
-            sets: { attackerTipped: true, mfaBackdoor: true },
+            sets: (f, st) => ({ attackerTipped: true, mfaBackdoor: true, tippedAt: st.elapsed }),
             outcome: 'The CEO is on vacation with limited connectivity. He doesn\'t respond for 3 hours. Meanwhile, the wire clears through intermediary banks and no recall is ever requested. Worse: your reply went to the Reply-To address — the attacker\'s typosquat — so they now know the MSSP is involved.',
           },
         ],
@@ -153,10 +163,12 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
       },
       { // CONTAINMENT
         name: 'CONTAINMENT',
+        // Replying to the "CEO" cost three hours of waiting for him to surface
+        at: f => f.attackerTipped ? f.tippedAt + 180 : 0,
         narrative: f => [
           f.recallFiled
             ? 'The wire recall is in progress.'
-            : 'No wire recall was ever filed — by the time the CEO answered, the money had cleared.',
+            : 'No wire recall was ever filed — by the time the CEO answered, three hours on, the money had cleared.',
           f.headersAnalyzed
             ? 'Your header work already tied the reply-to to ashf0rd-mfg.com, so you know what to look for.'
             : '',
@@ -174,13 +186,13 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
   Client: Browser (Chrome 121 / Windows)
 <span class="log-warn">[Feb 17 02:16]</span> Inbox Rule Created: "Administrative"<!--f:inboxRule-->
   Condition: Subject contains "wire" OR "transfer" OR "payment"<!--f:inboxRule-->
-  Action: Move to RSS Feeds, Mark as Read<!--f:inboxRule-->
-<span class="log-warn">[Feb 17 02:18]</span> Mail forwarding: ceo@ashf0rd-mfg.com added<!--f:forwarding-->
+  Actions: Forward to ceo@ashf0rd-mfg.com, Move to RSS Feeds, Mark as Read<!--f:inboxRule-->
+<span class="log-warn">[Feb 17 02:18]</span> Mailbox forwarding (SMTP) also set: ceo@ashf0rd-mfg.com<!--f:forwarding-->
 <span class="log-warn">[Feb 17 03:00]</span> 847 emails accessed in CEO mailbox
-<span class="log-warn">[Feb 18 11:48]</span> Spoofed email sent externally (from different infra)
+<span class="log-warn">[Feb 19 11:48]</span> Spoofed email sent externally (from different infra)
 <span class="log-ok">[Feb 19 14:22]</span> Incident reported to MSSP${f.attackerTipped ? `
-<span class="log-warn">[Feb 19 14:31]</span> Sign-in: ceo@ashford-mfg.com from 41.190.2.44
-<span class="log-warn">[Feb 19 14:33]</span> Security info registered: Authenticator app "iPhone 15"<!--f:authApp-->
+<span class="log-warn">[${becStamp(f.tippedAt + 9, true)}]</span> Sign-in: ceo@ashford-mfg.com from 41.190.2.44
+<span class="log-warn">[${becStamp(f.tippedAt + 11, true)}]</span> Security info registered: Authenticator app "iPhone 15"<!--f:authApp-->
   Tenant setting: Self-service password reset ENABLED (1 method)<!--f:authApp-->` : ''}`
         },
         choices: [
@@ -190,6 +202,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Full account containment: lock out the attacker, clean up persistence, and block the lookalike domain.',
             quality: 'good',
             score: { time: 10, containment: 25, evidence: 10, thoroughness: 15 },
+            sets: (f, st) => ({ containedAt: st.elapsed }),
             outcome: 'CEO\'s password reset and all active sessions revoked. The malicious inbox rule and mail forwarding to the typosquat domain removed. IT blocks ashf0rd-mfg.com at the email gateway and web proxy. The attacker appears to be locked out.',
           },
           {
@@ -198,7 +211,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Secure the account with new credentials and add multi-factor authentication.',
             quality: 'partial',
             score: { time: 10, containment: 10, evidence: 0, thoroughness: 0 },
-            sets: { rulesRemain: true },
+            sets: (f, st) => ({ rulesRemain: true, containedAt: st.elapsed }),
             outcome: f => 'Password reset and MFA enabled — good. But you didn\'t revoke existing sessions (the attacker\'s token stays valid for up to an hour) and didn\'t remove the inbox rule that\'s silently forwarding emails to the typosquat domain.'
               + (f.attackerTipped ? ' And the MFA prompt the CEO gets offers him an Authenticator he never set up — he assumes IT did it.' : ''),
           },
@@ -208,7 +221,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Completely disable the account to prevent any access.',
             quality: 'bad',
             score: { time: 5, containment: 15, evidence: -10, thoroughness: -5 },
-            sets: { ceoDisabled: true, rulesRemain: true },
+            sets: (f, st) => ({ ceoDisabled: true, rulesRemain: true, containedAt: st.elapsed }),
             outcome: 'Account disabled — attacker is locked out, but so is the CEO. He\'s on vacation and now can\'t access email, Teams, or OneDrive. Important business communications are disrupted. The inbox rule and forwarding are still configured and will reactivate when the account is re-enabled.',
           },
           {
@@ -218,7 +231,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Remove the rogue "iPhone 15" method, then reset password, revoke sessions, remove rules and forwarding, block the typosquat.',
             quality: 'good',
             score: { time: 10, containment: 30, evidence: 10, thoroughness: 20 },
-            sets: { mfaBackdoor: false },
+            sets: (f, st) => ({ mfaBackdoor: false, containedAt: st.elapsed }),
             outcome: 'You pull the attacker\'s Authenticator off the account before touching the password — with it gone, self-service reset has nothing to verify against. Password reset, sessions revoked, inbox rule and forwarding removed, ashf0rd-mfg.com blocked. This time the lockout actually holds.',
           },
         ],
@@ -240,12 +253,12 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
         carried: f => {
           const out = [];
           if (f.mfaBackdoor && !f.ceoDisabled) out.push({
-            text: '15:02 — the attacker used the Authenticator they registered at 14:33 to self-service reset the CEO\'s password. They are back in the mailbox.',
+            text: `${becStamp(f.containedAt + 20)} — the attacker used the Authenticator they registered at ${becStamp(f.tippedAt + 11)} to self-service reset the CEO's password. They are back in the mailbox.`,
             score: { containment: -10, evidence: -5 },
           });
           if (f.mfaBackdoor && f.ceoDisabled) out.push({
             sev: 'info',
-            text: '15:02 — a self-service password reset on the CEO account was attempted from 41.190.2.44 and failed: the account is disabled.',
+            text: `${becStamp(f.containedAt + 20)} — a self-service password reset on the CEO account was attempted from 41.190.2.44 and failed: the account is disabled.`,
           });
           if (f.rulesRemain && !f.ceoDisabled) out.push({
             text: 'The "Administrative" forwarding rule is still live — every wire or payment email since containment went to ashf0rd-mfg.com.',
@@ -280,7 +293,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
   VP Sales account: <span class="log-highlight">Also compromised</span><!--f:vpSales-->
     Sign-in from 41.190.2.44 on Feb 17 02:30<!--f:vpSales-->
     No inbox rules created (yet)${f.mfaBackdoor && !f.ceoDisabled ? `
-  CEO account: <span class="log-highlight">SSPR reset Feb 19 15:02 via Authenticator "iPhone 15"</span><!--f:sspr-->` : ''}
+  CEO account: <span class="log-highlight">SSPR reset ${becStamp(f.containedAt + 20, true)} via Authenticator "iPhone 15"</span><!--f:sspr-->` : ''}
 
 <span class="log-ok">── CEO MAILBOX ACCESS ──</span>
   Attacker accessed: 847 emails over 2 days
@@ -362,7 +375,7 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
 
 <span class="log-highlight">INBOX RULES / FORWARDING:</span>
   CEO: Rule "Administrative" + forward to ashf0rd-mfg.com — ${f.rulesRemain ? '<span class="log-highlight">STILL ACTIVE</span>' : 'removed'}
-  VP Sales: ${f.vpSecured ? 'No rules (account secured)' : '<span class="log-highlight">Rule "Sync" created Feb 20 — forwards "invoice" mail externally</span>'}
+  VP Sales: ${f.vpSecured ? 'No rules (account secured)' : '<span class="log-highlight">Rule "Sync" created Feb 19 — forwards "invoice" mail externally</span>'}
 ${f.mfaBackdoor ? `
 <span class="log-highlight">AUTHENTICATION METHODS:</span>
   CEO: Authenticator "iPhone 15" — registered from 41.190.2.44
@@ -458,7 +471,7 @@ ${f.mfaBackdoor ? `
 <span class="log-warn">LEGAL / REGULATORY:</span>
   - IC3 complaint not yet filed
   - Cyber insurance carrier not yet notified
-  - Potential SEC implications (M&A data exposed)
+  - Potential SEC implications (Ashford is NASDAQ-listed; M&A data exposed)
   - State breach notification requirements unclear`
         },
         choices: [
@@ -484,7 +497,7 @@ ${f.mfaBackdoor ? `
               + (f.recallFiled ? ''
                 : f.saw_beneficiary
                   ? 'Because the filing lands inside 72 hours and names the beneficiary account you pulled from the email, the FBI\'s Recovery Asset Team freezes $60,000 still sitting at an intermediary bank — the first money anyone has clawed back. '
-                  : 'The Recovery Asset Team asks for the beneficiary routing and account numbers. Nobody wrote them down, and the CFO\'s copy of the email was deleted in the panic. By the time the bank supplies them, the funds have moved on. ')
+                  : 'The Recovery Asset Team asks for the beneficiary bank\'s SWIFT code and the account number. Nobody wrote them down, and the CFO\'s copy of the email was deleted in the panic. By the time the bank supplies them, the funds have moved on. ')
               + 'Cyber insurance carrier notified within policy window — claim is accepted. Legal counsel determines SEC notification required due to M&A data exposure and drafts the filing.',
           },
           {
@@ -496,7 +509,7 @@ ${f.mfaBackdoor ? `
             sets: f => ({ wireRecovered: f.wireRecovered + (!f.recallFiled && f.saw_beneficiary ? 60000 : 0) }),
             outcome: f => 'IC3 filed and insurance notified — good. '
               + (f.recallFiled ? '' : f.saw_beneficiary ? 'The FBI Recovery Asset Team freezes $60,000 at an intermediary bank. ' : 'Without the beneficiary details the Recovery Asset Team can\'t act in time. ')
-              + 'But without prompting legal review, the client misses the 4-day SEC filing window for material cyber incidents. The SEC later questions the delayed disclosure, adding regulatory risk on top of the financial loss.',
+              + 'But without prompting legal review, the client misses the Form 8-K Item 1.05 window — four business days from deciding the incident is material. The SEC later questions the delayed disclosure, adding regulatory risk on top of the financial loss.',
           },
           {
             key: 'C',
@@ -537,9 +550,9 @@ ${f.mfaBackdoor ? `
             return `<span class="log-ok">TIMELINE:</span>
   Attack start:       Feb 15 08:33 (phishing email)
   Account compromise: Feb 17 02:14 (CEO credentials used)
-  BEC email sent:     Feb 18 11:48 (fraudulent wire request)
+  BEC email sent:     Feb 19 11:48 (fraudulent wire request)
   Wire initiated:     Feb 19 12:15 (CFO approved)
-  Detection:          Feb 19 14:22 (CEO reported)
+  Detection:          Feb 19 14:22 (CFO reported)
   Time on incident:   ${formatElapsed(st.elapsed)}
 
 <span class="log-warn">FINANCIAL IMPACT:</span>

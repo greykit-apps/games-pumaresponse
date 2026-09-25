@@ -29,10 +29,14 @@ function rwRestoreHours(f, how) {
   return h;
 }
 function rwDuration(h) { return h < 48 ? `${h} hours` : `${(h / 24).toFixed(1)} days`; }
-// Recovery starts Feb 19 10:00
-function rwClockAt(h) {
-  const t = 10 + h;
-  return `Feb ${19 + Math.floor(t / 24)} ~${String(t % 24).padStart(2, '0')}:00`;
+// Wall-clock stamp m minutes after the 03:42 handoff (Feb 19)
+function rwStamp(m) {
+  const t = 3 * 60 + 42 + Math.floor(m);
+  return `Feb ${19 + Math.floor(t / 1440)} ${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+// When full operations return: recovery started at f.recoveryStartMin and took f.recoveryHours
+function rwClockAt(f) {
+  return rwStamp(f.recoveryStartMin + f.recoveryHours * 60);
 }
 // Ways back in the attacker still holds
 function rwFoothold(f) {
@@ -55,7 +59,7 @@ registerIncident(
     // In-world "today": every date in this file is written relative to it and
     // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
     baseDate: '2024-02-19',
-    assignedTime: '03:42 UTC',
+    assignedTime: '03:42 ET',
     summary: 'Multiple endpoints reporting encrypted files with .lockbit extension. Ransom note detected on 3 file servers. AD environment may be compromised.',
     iocs: [
       { type: 'FILE HASH', val: 'a3b5c7d9e1f2...4a8b (SHA256) — LockBit payload' },
@@ -88,6 +92,8 @@ registerIncident(
       reimaged: false,        // Eradication reimaged endpoints (3-day rebuild)
       recoveryHours: 0,       // hours from the start of Recovery to full operations
       ransomPaid: false,
+      containedAt: 0,         // wall-clock minute (since handoff) the Containment action landed
+      recoveryStartMin: 0,    // wall-clock minute the restore began
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
@@ -131,7 +137,7 @@ registerIncident(
     phases: [
       { // TRIAGE
         name: 'TRIAGE',
-        narrative: 'You receive the handoff at 03:42 UTC. The client\'s helpdesk is panicking — three file servers are showing ransom notes and users are reporting they can\'t open files. The night shift SOC analyst flagged it as "suspicious encryption activity" 47 minutes ago but didn\'t escalate.',
+        narrative: 'You receive the handoff at 03:42. The client\'s helpdesk is panicking — three file servers are showing ransom notes and users are reporting they can\'t open files. The night shift SOC analyst flagged it as "suspicious encryption activity" 41 minutes ago but didn\'t escalate.',
         evidence: {
           title: 'INITIAL ALERT — EDR TELEMETRY',
           content: `<span class="log-warn">[03:01:14]</span> <span class="log-highlight">ALERT</span> CrowdStrike — svchost_update.exe executed on FS-PROD-01
@@ -278,7 +284,7 @@ registerIncident(
         ].filter(Boolean).join(' '),
         evidence: {
           title: 'LATERAL MOVEMENT ANALYSIS',
-          content: f => `<span class="log-warn">[Feb 18 02:14]</span> Successful auth: svc_backup → DC-PROD-01 (Kerberos)
+          content: (f, st) => `<span class="log-warn">[Feb 18 02:14]</span> Successful auth: svc_backup → DC-PROD-01 (Kerberos)
 <span class="log-warn">[Feb 18 02:15]</span> <span class="log-highlight">DCSync</span> detected from svc_backup — domain password hashes replicated, incl. KRBTGT<!--f:dcsync-->
 <span class="log-warn">[Feb 18 02:16]</span> LDAP query burst: svc_backup enumerated 4,118 user objects
 <span class="log-warn">[Feb 18 02:18]</span> PsExec execution: DC-PROD-01 → FS-PROD-01 (svc_backup)
@@ -289,27 +295,28 @@ registerIncident(
 <span class="log-warn">[Feb 19 02:40]</span> RDP logon: svc_backup → DC-PROD-01 from FS-PROD-01
 <span class="log-warn">[Feb 19 02:45]</span> <span class="log-highlight">GPO MODIFIED</span> — Default Domain Policy (disable AV)<!--f:gpoMod-->
 <span class="log-warn">[Feb 19 02:47]</span> WMI-Activity 5861: permanent subscription "SysMaint" — CommandLineEventConsumer on DC-PROD-01<!--f:wmiSub-->
-<span class="log-warn">[Feb 19 02:52]</span> Windows Update: KB5034441 install failed (0x80070643) — DC-PROD-02
+<span class="log-warn">[Feb 19 02:52]</span> Windows Update: KB5034770 install failed (0x800f0922) — DC-PROD-02
 <span class="log-warn">[Feb 19 03:01]</span> Encryption routine triggered via scheduled task
 ${f.memoryLost
-  ? '<span class="log-warn">[Feb 19 04:06]</span> RTR memory capture FS-PROD-01: FAILED — host offline (powered down)'
-  : '<span class="log-ok">[Feb 19 04:06]</span> RTR memory capture FS-PROD-01: in-memory beacon config — C2 185.220.101.34, failover update-cdn-sync[.]net<!--f:fallbackC2-->'}`
+  ? `<span class="log-warn">[${rwStamp(st.elapsed + 11)}]</span> RTR memory capture FS-PROD-01: FAILED — host offline (powered down)`
+  : `<span class="log-ok">[${rwStamp(st.elapsed + 11)}]</span> RTR memory capture FS-PROD-01: in-memory beacon config — C2 185.220.101.34, failover update-cdn-sync[.]net<!--f:fallbackC2-->`}`
         },
         choices: [
           {
             key: 'A',
-            label: 'Disable svc_backup, block C2 IPs at firewall, reset KRBTGT twice',
-            desc: 'Full containment: kill the compromised account, block exfil, and invalidate Kerberos tickets.',
+            label: 'Disable svc_backup, block C2 IPs at firewall, start the KRBTGT double reset',
+            desc: 'Full containment: kill the compromised account, block exfil, and begin invalidating Kerberos tickets — first KRBTGT reset now, the second once replication has converged.',
             quality: 'good',
             score: { time: 10, containment: 25, evidence: 10, thoroughness: 15 },
-            sets: f => ({
+            sets: (f, st) => ({
+              containedAt: st.elapsed,
               svcDisabled: true, c2Blocked: true, krbtgtReset: true, gpoReverted: true,
               // Cobalt Strike rotates to its failover host when the primary goes dark
               fallbackBlocked: !!f.saw_fallbackC2,
               fallbackLeak: !f.saw_fallbackC2,
               exfilTenths: f.exfilTenths + (f.saw_fallbackC2 ? 0 : 6),
             }),
-            outcome: f => 'Comprehensive containment executed. The attacker\'s access is severed at multiple points. KRBTGT double-reset invalidates any golden tickets. Firewall rules block C2 and exfil IPs. The GPO change is reverted.'
+            outcome: f => 'Comprehensive containment executed. The attacker\'s access is severed at multiple points. KRBTGT is reset once now, with the second reset scheduled for after replication converges — back to back, the pair would strand every live ticket in the domain, and forged golden tickets only die on the second. Firewall rules block C2 and exfil IPs. The GPO change is reverted.'
               + (f.saw_fallbackC2 ? ' The block list also carries update-cdn-sync[.]net, the failover host from the memory capture — without it the beacons would simply have rolled over.' : '')
               + (f.backupLoss === 'purged' ? ' svc_backup is disabled — but only after it had emptied the local Veeam repository.' : ''),
           },
@@ -319,7 +326,8 @@ ${f.memoryLost
             desc: 'Standard containment — block network indicators and lock the account.',
             quality: 'partial',
             score: { time: 5, containment: 10, evidence: 5, thoroughness: 5 },
-            sets: f => ({
+            sets: (f, st) => ({
+              containedAt: st.elapsed,
               svcDisabled: true, c2Blocked: true,
               fallbackBlocked: !!f.saw_fallbackC2,
               fallbackLeak: !f.saw_fallbackC2,
@@ -336,7 +344,8 @@ ${f.memoryLost
             desc: 'Power off DC-PROD-01 to prevent any further AD compromise.',
             quality: 'bad',
             score: { time: -20, containment: 5, evidence: -15, thoroughness: -10 },
-            sets: f => ({
+            sets: (f, st) => ({
+              containedAt: st.elapsed,
               dcDown: true,
               exfilTenths: f.exfilTenths + 8,
               // svc_backup is still valid on DC-PROD-02 and still owns the backups
@@ -348,16 +357,17 @@ ${f.memoryLost
             key: 'D',
             when: f => f.saw_wmiSub,
             label: 'Full containment, and pull the WMI subscription off DC-PROD-01 first',
-            desc: 'Remove the "SysMaint" filter, consumer and binding, then disable svc_backup, block C2 and exfil, reset KRBTGT twice, revert the GPO.',
+            desc: 'Remove the "SysMaint" filter, consumer and binding, then disable svc_backup, block C2 and exfil, start the KRBTGT double reset, revert the GPO.',
             quality: 'good',
             score: { time: 10, containment: 30, evidence: 10, thoroughness: 20 },
-            sets: f => ({
+            sets: (f, st) => ({
+              containedAt: st.elapsed,
               svcDisabled: true, c2Blocked: true, krbtgtReset: true, gpoReverted: true, wmiRemains: false, wmiKnown: true,
               fallbackBlocked: !!f.saw_fallbackC2,
               fallbackLeak: !f.saw_fallbackC2,
               exfilTenths: f.exfilTenths + (f.saw_fallbackC2 ? 0 : 6),
             }),
-            outcome: f => 'You export the "SysMaint" event filter, consumer and binding for evidence, then delete all three — the attacker\'s way back onto the DC is gone before you touch anything they would notice. svc_backup disabled, C2 and exfil IPs blocked, KRBTGT reset twice, GPO reverted.'
+            outcome: f => 'You export the "SysMaint" event filter, consumer and binding for evidence, then delete all three — the attacker\'s way back onto the DC is gone before you touch anything they would notice. svc_backup disabled, C2 and exfil IPs blocked, first KRBTGT reset done and the second scheduled behind replication, GPO reverted.'
               + (f.saw_fallbackC2 ? ' The block list carries the failover host from the memory capture, update-cdn-sync[.]net, too.' : '')
               + (f.backupLoss === 'purged' ? ' svc_backup is disabled — but only after it had emptied the local Veeam repository.' : ''),
           },
@@ -383,7 +393,7 @@ ${f.memoryLost
         carried: f => {
           const out = [];
           if (f.backupLoss === 'purgedLater') out.push({
-            text: '04:25 — svc_backup, never disabled, authenticated through DC-PROD-02 to VEEAM-01 and deleted every local restore point.',
+            text: `${rwStamp(f.containedAt + 35)} — svc_backup, never disabled, authenticated through DC-PROD-02 to VEEAM-01 and deleted every local restore point.`,
             score: { containment: -10 },
           });
           if (!f.c2Blocked) out.push({
@@ -391,7 +401,7 @@ ${f.memoryLost
             score: { containment: -10 },
           });
           if (f.fallbackLeak) out.push({
-            text: '04:05 — once 185.220.101.34 went dark, the beacons on the un-isolated workstations rolled over to their failover host, update-cdn-sync[.]net, which nobody blocked. Another 0.6 GB left through it.',
+            text: `${rwStamp(f.containedAt + 15)} — once 185.220.101.34 went dark, the beacons on the un-isolated workstations rolled over to their failover host, update-cdn-sync[.]net, which nobody blocked. Another 0.6 GB left through it.`,
             score: { containment: -5 },
           });
           if (f.dcDown) out.push({
@@ -425,8 +435,8 @@ ${f.memoryLost
 <span class="log-warn">[Feb 14 11:00]</span> Privilege escalation: jsmith → svc_backup (pass-the-hash)<!--f:credTheft-->
 <span class="log-warn">[Feb 16 18:05]</span> VPN logon: jsmith from residential ISP (matches 90-day baseline)
 <span class="log-warn">[Feb 17 23:40]</span> 7z.exe: 1,912 files archived into C:\\ProgramData\\WindowsUpdate\\ — FS-PROD-02<!--f:stagingDir-->${f.fallbackLeak ? `
-<span class="log-warn">[Feb 19 04:06]</span> WS-FIN-07: beacon DNS lookups → update-cdn-sync[.]net, HTTPS every 60s<!--f:fallbackC2-->` : ''}${!f.c2Blocked ? `
-<span class="log-warn">[Feb 19 04:10]</span> Beacon check-ins continue: 11 hosts → 185.220.101.34 (no firewall block)<!--f:c2Live-->` : ''}
+<span class="log-warn">[${rwStamp(f.containedAt + 16)}]</span> WS-FIN-07: beacon DNS lookups → update-cdn-sync[.]net, HTTPS every 60s<!--f:fallbackC2-->` : ''}${!f.c2Blocked ? `
+<span class="log-warn">[${rwStamp(f.containedAt + 20)}]</span> Beacon check-ins continue: 11 hosts → 185.220.101.34 (no firewall block)<!--f:c2Live-->` : ''}
 <span class="log-ok">[FORENSIC NOTE]</span> Exfil staging directory: C:\\ProgramData\\WindowsUpdate\\<!--f:stagingDir-->`
         },
         choices: [
@@ -532,7 +542,7 @@ ${persist.map((p, i) => `  [${i + 1}] ${p}`).join('\n')}
 <span class="log-highlight">COMPROMISED CREDENTIALS:</span>
   - jsmith (domain user)
   - svc_backup (service account — domain admin)${f.svcDisabled ? ' — disabled' : ' — <span class="log-highlight">STILL ENABLED</span>'}
-  - KRBTGT ${f.krbtgtReset ? '— reset twice during containment' : '(golden ticket possible)'}
+  - KRBTGT ${f.krbtgtReset ? '— first reset in containment, second scheduled behind replication' : '(golden ticket possible)'}
   - 3 additional service accounts used for lateral movement
 
 <span class="log-highlight">MALICIOUS ARTIFACTS:</span>
@@ -624,10 +634,10 @@ ${persist.map((p, i) => `  [${i + 1}] ${p}`).join('\n')}
           title: 'RECOVERY STATUS',
           content: f => `<span class="log-ok">BACKUP ASSESSMENT:</span>
 ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTROYED</span> (${f.backupLoss === 'encrypted' ? 'encrypted with VEEAM-01' : 'restore points deleted via svc_backup'})
-  - Immutable offsite copy: Feb 13 23:00 UTC (weekly, object lock) — VERIFIED
+  - Immutable offsite copy: Feb 13 23:00 (weekly, object lock) — VERIFIED
   - Restore path: WAN pull from object storage (~14 h per server)
   - Data loss window: Feb 13 23:00 → Feb 19 (5 days)`
-  : `  - Last clean backup: Feb 13 23:00 UTC (before compromise execution)
+  : `  - Last clean backup: Feb 13 23:00 (before compromise execution)
   - Backup integrity: VERIFIED (offline/immutable backups)
   - Local repository: nightly file-level restore points through Feb 18 23:00`}
   - Backup coverage: ${RW_SERVERS.slice(0, Math.min(f.serversEncrypted, 6)).join(', ')} — full file-level
@@ -658,7 +668,7 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
             quality: 'good',
             score: { time: 5, containment: 10, evidence: 5, thoroughness: 15 },
             // The 4-hour canary window is watched by enhanced EDR across the estate
-            sets: f => ({ recoveryHours: rwRestoreHours(f, 'staged'), wmiRemains: false }),
+            sets: (f, st) => ({ recoveryStartMin: st.elapsed, recoveryHours: rwRestoreHours(f, 'staged'), wmiRemains: false }),
             outcome: f => `FS-PROD-01 restored from ${f.backupLoss ? 'the immutable offsite copy' : 'clean backup'} and monitored for 4 hours — `
               + (f.wmiRemains ? 'and the canary earns its keep: in hour three, EDR flags scrcons.exe on DC-PROD-01 spawning PowerShell. It is the WMI subscription nobody removed; you pull it before anything else comes back online.' : 'no suspicious activity.')
               + ' Remaining servers restored in parallel. '
@@ -672,7 +682,7 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
             desc: 'Parallel restore of all encrypted servers. Fastest path to business resumption.',
             quality: 'partial',
             score: { time: 15, containment: 0, evidence: 0, thoroughness: -5 },
-            sets: f => ({ recoveryHours: rwRestoreHours(f, 'parallel') }),
+            sets: (f, st) => ({ recoveryStartMin: st.elapsed, recoveryHours: rwRestoreHours(f, 'parallel') }),
             outcome: f => 'All servers restored in parallel. '
               + (f.backupLoss ? `Even pulling everything at once from object storage, it takes ${rwDuration(rwRestoreHours(f, 'parallel'))}.` : 'Operations resume quickly, client is happy with the speed.')
               + ' However, you didn\'t verify the backup was truly clean before mass deployment — fortunately it was, but this approach carried unnecessary risk.'
@@ -685,7 +695,7 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
             desc: 'The client\'s CFO is pressuring to pay. Use the decryptor and skip the backup restore.',
             quality: 'bad',
             score: { time: -5, containment: -15, evidence: -10, thoroughness: -20 },
-            sets: f => ({ ransomPaid: true, recoveryHours: rwRestoreHours(f, 'paid') }),
+            sets: (f, st) => ({ recoveryStartMin: st.elapsed, ransomPaid: true, recoveryHours: rwRestoreHours(f, 'paid') }),
             outcome: 'Against best practices, the client pays $450,000 in Bitcoin — with intact backups, and without the sanctions screening Treasury expects: LockBit\'s administrator and several affiliates are on OFAC\'s SDN list, and a sanctions violation is strict liability. The decryptor works on only 60% of files — the rest are corrupted. You still need to restore from backup anyway. The payment funds further criminal operations and paints the client as a willing payer for future attacks. Cyber insurance may not cover the ransom. Nor does it buy back the stolen data: a promise to delete it is unenforceable, and LockBit has been caught keeping data from victims who paid.',
           },
           {
@@ -695,7 +705,7 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
             desc: 'The immutable copy is five days stale and a multi-day WAN restore. LockBit wants $450,000 in Bitcoin.',
             quality: 'bad',
             score: { time: -5, containment: -15, evidence: -10, thoroughness: -20 },
-            sets: f => ({ ransomPaid: true, recoveryHours: rwRestoreHours(f, 'paid') }),
+            sets: (f, st) => ({ recoveryStartMin: st.elapsed, ransomPaid: true, recoveryHours: rwRestoreHours(f, 'paid') }),
             outcome: f => `The client pays $450,000 in Bitcoin without a sanctions screening: LockBit's administrator and several affiliates are on OFAC's SDN list, and a sanctions violation is strict liability — the carrier refuses to reimburse. Negotiation and the decryptor take two days; it recovers about 60% of files at their Feb 19 state, and the rest are corrupted and come back from the Feb 13 immutable copy anyway — the restore you were trying to avoid. Full operations take ${rwDuration(rwRestoreHours(f, 'paid'))}. The payment funds further criminal operations, marks Meridian as a willing payer, and buys nothing on the stolen data: LockBit has been caught keeping data from victims who paid.`,
           },
         ],
@@ -714,6 +724,8 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
       },
       { // POST-INCIDENT
         name: 'POST-INCIDENT',
+        // The review meeting is scheduled once full operations are back
+        at: f => f.recoveryStartMin + f.recoveryHours * 60 + 30,
         carried: f => {
           const foot = rwFoothold(f);
           return foot.length ? [{
@@ -727,12 +739,12 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
           content: (f, st) => `<span class="log-ok">INCIDENT TIMELINE:</span>
   Initial access:    Feb 14 09:12 (phishing)
   Privilege escalation: Feb 14 11:00
-  Lateral movement:  Feb 14-18 (5 days)
+  Lateral movement:  Feb 14 to Feb 18 (5 days)
   Data exfiltration:  Feb 18 02:22 onward (${f.exfilScope ? `${rwGB(f.exfilTenths)} GB` : 'volume not scoped'})
   Encryption:        Feb 19 03:01
-  Detection:         Feb 19 03:01 (47 min to escalation)
-  Containment:       Feb 19 ~03:50
-  Recovery complete: ${rwClockAt(f.recoveryHours)}
+  Detection:         Feb 19 03:01 (41 min to escalation)
+  Containment:       ${rwStamp(f.containedAt + 8)}
+  Recovery complete: ${rwClockAt(f)}
   Time on incident:  ${formatElapsed(st.elapsed)}
 
 <span class="log-warn">IMPACT:</span>

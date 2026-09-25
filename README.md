@@ -42,7 +42,7 @@ Seven incident scenarios. By default one is picked at random from those you have
 | **Business Email Compromise (BEC/CEO Fraud)** | HIGH | $340K wire transfer initiated via spoofed CEO email. Within the recall window. Credential compromise confirmed. |
 | **Supply Chain Compromise** | CRITICAL | Trusted RMM vendor pushes backdoored update to 340+ endpoints at a healthcare org. Patient data at risk. HIPAA implications. |
 | **Insider Threat** | HIGH | Departing engineer exfiltrates ITAR-controlled avionics designs to a foreign-owned competitor. FBI referral at stake. |
-| **Cloud Infrastructure Breach** | CRITICAL | AWS access keys leaked in a public GitHub repo. Crypto miners, IAM escalation, and 2.1M payment card records exposed. PCI-DSS breach. |
+| **Cloud Infrastructure Breach** | CRITICAL | AWS access keys leaked in a public GitLab repo. Crypto miners, IAM escalation, and 2.1M payment card records exposed. PCI-DSS breach. |
 | **DDoS Smokescreen** | CRITICAL | Volumetric DDoS masks a simultaneous SQL injection and POS malware deployment across 52 retail locations on Black Friday. |
 | **Web Application RCE** | CRITICAL | Zero-day deserialization exploit on a law firm's client portal. Attacker gains root, dumps attorney-client privileged case files. |
 
@@ -147,7 +147,7 @@ pumaresponse/
 
 ## Development
 
-Each scenario lives in its own file under `js/scenarios/` and registers itself with `INCIDENTS.push({...})`; the `<script>` order in `index.html` is the order scenarios appear in the menu. To add one, write a new file and add its `<script>` tag after the others. Scenarios register with `registerIncident({...})` and must declare a `baseDate` (the in-world "today"). Write dates relative to it (`Feb 17` two days before a `2024-02-19` base) and the game shows them relative to the real date, so the incident is always happening today. CVE years and times of day are never shifted. Any field can be a plain value or a function of the run's state, which is how later phases react to earlier choices. The mechanics are documented where they're implemented in `js/game.js` — search for `EVIDENCE TAGGING` and `DECISION CLOCK`.
+Each scenario lives in its own file under `js/scenarios/` and registers itself with `INCIDENTS.push({...})`; the `<script>` order in `index.html` is the order scenarios appear in the menu. To add one, write a new file and add its `<script>` tag after the others. Scenarios register with `registerIncident({...})` and must declare a `baseDate` (the in-world "today"). Write dates relative to it (`Feb 17` two days before a `2024-02-19` base) and the game shows them relative to the real date, so the incident is always happening today. CVE years and times of day are never shifted. Any field can be a plain value or a function of the run's state, which is how later phases react to earlier choices. The incident wall clock (SIEM stamps, time on incident) never runs behind the story: a phase starts no earlier than its first authored SIEM time, or than `at` (minutes since assignment) when a phase declares one — use `at` when a branch skips ahead by hours or days. The mechanics are documented where they're implemented in `js/game.js` — search for `EVIDENCE TAGGING` and `DECISION CLOCK`.
 
 After changing a scenario, check it with the harness. Serve the repo (`python3 -m http.server 8000`), open the game, and in the browser console:
 

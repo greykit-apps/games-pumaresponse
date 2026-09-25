@@ -42,12 +42,21 @@ function ddosStores(f) {
 function ddosTerminals(f) {
   return ddosRollout(Math.min(f.haltT, 999))[2];
 }
-// Revenue: e-commerce down 17:00 → ddosEndT at $42K/h; card acceptance $85K/h across 52 stores
+// Revenue: e-commerce down 17:00 → ddosEndT at $42K/h; card acceptance $85K per
+// open hour across 52 stores. Stores trade until 23:00 (half rate in the last
+// hour), reopen at 06:00, and lose nothing while they are shut.
 function ddosEcomLoss(f) {
   return 42000 * (128 + f.ddosEndT) / 60;
 }
-function ddosStoreLoss(stores, minutes) {
-  return stores * (85000 / 52) * Math.max(0, minutes) / 60;
+function ddosOpen(m) {
+  const tod = (((1148 + Math.floor(m)) % 1440) + 1440) % 1440;
+  return tod < 360 || tod >= 1380 ? 0 : tod >= 1320 ? 0.5 : 1;
+}
+// Dollars lost at `stores` card-less stores between scenario minutes from and to
+function ddosStoreLoss(stores, from, to) {
+  let n = 0;
+  for (let m = Math.ceil(from); m < to; m++) n += ddosOpen(m);
+  return stores * (85000 / 52) * n / 60;
 }
 function ddosPreciseScope(f) {
   return !!(f.forensicsDone || f.mgmtAnalyzed || f.saw_exfilVolume);
@@ -92,11 +101,11 @@ registerIncident(
     client: 'CrestView Retail Group',
     severity: 'CRITICAL',
     sevClass: 'high',
-    ticketId: 'IR-2024-0634',
+    ticketId: 'IR-2024-3410',
     // In-world "today" (Black Friday 2024 — the scenario is set on Black Friday): dates in this file are written relative to it and
     // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
     baseDate: '2024-11-29',
-    assignedTime: '19:08 UTC',
+    assignedTime: '19:08 ET',
     summary: 'Volumetric DDoS attack on e-commerce platform (Black Friday weekend). While the SOC scrambles to mitigate, attackers exploit a SQLi vulnerability on a forgotten staging server and pivot to the POS network. Card skimming malware deployed.',
     iocs: [
       { type: 'IP RANGE', val: '192.0.2.0/24 — DDoS source (botnet, spoofed)' },
@@ -179,9 +188,9 @@ registerIncident(
   Payload: /api/v1/products?id=1' UNION SELECT * FROM users--<!--f:sqli-->
   staging-api has DB credentials for production catalog DB<!--f:sharedCreds-->
 <span class="log-warn">[17:12]</span> DNS: 41 Gbps of amplified ANY responses from open resolvers
+<span class="log-warn">[17:15]</span> staging-api → prod-db-replica: Unusual queries<!--f:sharedCreds-->
 <span class="log-warn">[17:20]</span> Support desk: 1,240 tickets "site down / checkout failing"
 <span class="log-warn">[17:31]</span> CDN provider: scrubbing profile "BF-aggressive" enabled
-<span class="log-warn">[17:45]</span> staging-api → prod-db-replica: Unusual queries<!--f:sharedCreds-->
 <span class="log-warn">[18:05]</span> DDoS vector shift: HTTP/2 rapid reset against /checkout
 <span class="log-warn">[18:15]</span> <span class="log-highlight">ALERT</span> Lateral movement: staging-api → POS-MGMT-01<!--f:lateral-->
   Method: SSH with harvested credentials from catalog DB<!--f:lateral-->
@@ -340,7 +349,7 @@ registerIncident(
                 extraSwipes: f.extraSwipes + (f.exfilBlockT < 999 ? 0 : ddosSwipes(T + 60, 240, 999, 93)),
                 memLost: true,
                 mgmtLogsWiped: f.mgmtLogsWiped || !f.mgmtIsolated,
-                posLoss: f.posLoss + ddosStoreLoss(38, 232 - (T + 60)),
+                posLoss: f.posLoss + ddosStoreLoss(38, T + 60, 232),
                 t: T + 120,
               };
             },
@@ -350,7 +359,7 @@ registerIncident(
               const g = { ...f, exfilBlockT: Math.min(f.exfilBlockT, T + 60), extraSwipes: f.extraSwipes + (open ? ddosSwipes(T + 60, 240, 999, 93) : 0) };
               return 'You start calling stores but it\'s Black Friday — managers are overwhelmed, phones go to voicemail, and some stores have already closed for the night with terminals still running. After 2 hours, 38 of 52 locations have complied. '
                 + (open ? 'The remaining 14 locations continue skimming cards until they close at 23:00. ' : 'Exfil is already sinkholed, so the 14 holdouts leak nothing — but the scraper stays loaded on their terminals. ')
-                + `Volatile memory evidence is lost on powered-off terminals. Revenue loss from offline POS adds to the DDoS impact: about ${fmtUSD(ddosStoreLoss(38, 232 - (T + 60)))} at the dark stores tonight.`
+                + `Volatile memory evidence is lost on powered-off terminals. Revenue loss from offline POS adds to the DDoS impact: about ${fmtUSD(ddosStoreLoss(38, T + 60, 232))} at the dark stores tonight.`
                 + (f.mgmtIsolated ? '' : ' And nobody touches POS-MGMT-01 — the attacker\'s tunnel stays up the whole time.')
                 + ` Estimated exposure: ~${ddosN(ddosCards(g))} cards.`;
             },
@@ -402,9 +411,9 @@ registerIncident(
           { at: 16, when: f => f.exfilBlockT >= 999, sev: 'crit', text: f => `Exfil continues — ~${ddosN(ddosCardsAt(f.t + 16))} cards stolen`, score: { containment: -3 } },
         ],
         siemEntries: f => [
-          { time: ddosTime(f.t + 12), sev: 'crit', text: `${ddosTerminals(f.haltT < 999 ? f : { haltT: f.t })} POS terminals compromised — ${f.exfilBlockT < 999 ? 'scraper resident, exfil blocked' : 'active card skimming'}` },
-          { time: ddosTime(f.t + 14), sev: 'warn', text: 'Exfil to cdn-static-assets[.]xyz every 5 minutes per terminal' },
-          { time: ddosTime(f.t + 17), sev: 'crit', text: `Estimated ${ddosN(f.exfilBlockT < 999 ? ddosCards(f) : ddosCardsAt(f.t))} cards exfiltrated so far` },
+          { time: ddosTime(f.t), sev: 'crit', text: `${ddosTerminals(f.haltT < 999 ? f : { haltT: f.t })} POS terminals compromised — ${f.exfilBlockT < 999 ? 'scraper resident, exfil blocked' : 'active card skimming'}` },
+          { time: ddosTime(f.t + 2), sev: 'warn', text: 'Exfil to cdn-static-assets[.]xyz every 5 minutes per terminal' },
+          { time: ddosTime(f.t + 5), sev: 'crit', text: `Estimated ${ddosN(f.exfilBlockT < 999 ? ddosCards(f) : ddosCardsAt(f.t))} cards exfiltrated so far` },
         ],
       },
       { // INVESTIGATION
@@ -505,7 +514,7 @@ registerIncident(
           { at: 14, when: f => !f.memLost, sev: 'warn', text: 'Terminals: Windows event logs wrapped at 9 high-volume stores', sets: { termLogsRolled: true }, score: { evidence: -3 } },
         ],
         siemEntries: f => [
-          { time: ddosTime(f.t + 5), sev: 'info', text: 'Investigation: full attack chain reconstruction' },
+          { time: ddosTime(f.t), sev: 'info', text: 'Investigation: full attack chain reconstruction' },
           { time: ddosTime(f.t + 15), sev: 'warn', text: 'Staging server unpatched for 14 months — forgotten asset' },
           { time: ddosTime(f.t + 20), sev: 'crit', text: `~${ddosN(ddosCards(f))} cards exfiltrated — Track 1 + Track 2 data` },
           { time: ddosTime(f.t + 30), sev: 'warn', text: 'Plaintext SSH keys stored in database — POS access compromised' },
@@ -518,7 +527,7 @@ registerIncident(
           score: { evidence: -10 },
         }] : [],
         narrative: f => (f.forensicsDone ? 'The attack chain is fully mapped.' : 'You have a partial map of the attack chain.')
-          + ' Remove all attacker artifacts, close the vulnerabilities that were exploited, and ensure the POS infrastructure is clean before any terminals process another card. CrestView has suspended card acceptance at all 52 stores until then — about $85,000 an hour, on Black Friday weekend.',
+          + ' Remove all attacker artifacts, close the vulnerabilities that were exploited, and ensure the POS infrastructure is clean before any terminals process another card. CrestView has suspended card acceptance at all 52 stores until then — about $85,000 for every open hour, on Black Friday weekend.',
         evidence: {
           title: 'REMEDIATION INVENTORY',
           content: f => `<span class="log-highlight">MALWARE &amp; PERSISTENCE:</span>
@@ -547,7 +556,7 @@ registerIncident(
             desc: 'Comprehensive eradication: remove malware from every terminal, decommission all forgotten infrastructure, implement POS network segmentation, and rotate every compromised credential.',
             quality: 'good',
             score: { time: 5, containment: 15, evidence: 5, thoroughness: 20 },
-            sets: (f, st) => ({ mgmtBackdoor: false, mgmtRebuilt: true, segmented: true, usersReset: true, posLoss: f.posLoss + ddosStoreLoss(52, st.phaseClock) }),
+            sets: (f, st) => ({ mgmtBackdoor: false, mgmtRebuilt: true, segmented: true, usersReset: true, posLoss: f.posLoss + ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock) }),
             outcome: f => `All ${ddosTerminals(f)} infected terminals cleaned and verified. POS-MGMT-01 rebuilt from clean media${ddosBackdoorKnown(f) ? '' : ' — which also takes out an authorized_keys entry and a cron\'d autossh job nobody had found yet'}. Staging server and 3 other forgotten instances decommissioned. POS network segmented into its own VLAN with strict firewall rules. All database credentials rotated. SSH keys regenerated with proper key management. admin_credentials table replaced with a proper secrets vault. Forced password reset for all user accounts.`,
           },
           {
@@ -556,7 +565,7 @@ registerIncident(
             desc: 'Clean the immediate threat. Network redesign is a bigger project.',
             quality: 'partial',
             score: { time: 10, containment: 5, evidence: 0, thoroughness: -5 },
-            sets: (f, st) => ({ mgmtBackdoor: f.mgmtBackdoor && !ddosBackdoorKnown(f), posLoss: f.posLoss + ddosStoreLoss(52, st.phaseClock) }),
+            sets: (f, st) => ({ mgmtBackdoor: f.mgmtBackdoor && !ddosBackdoorKnown(f), posLoss: f.posLoss + ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock) }),
             outcome: f => 'Terminals cleaned and SSH keys rotated. '
               + (ddosBackdoorKnown(f)
                 ? 'Because you knew about it, you also strip the attacker\'s authorized_keys entry and cron job from POS-MGMT-01. '
@@ -569,15 +578,15 @@ registerIncident(
             desc: 'Nuclear option — wipe and reimage every terminal from the known-good base image.',
             quality: 'partial',
             score: { time: -15, containment: 20, evidence: -15, thoroughness: 5 },
-            sets: (f, st) => ({ terminalsWiped: true, posLoss: f.posLoss + 2100000 + ddosStoreLoss(52, st.phaseClock) }),
-            outcome: f => 'Reimaging 347 terminals across 52 locations takes 3 days. Every store is offline for 4-6 hours during the process — on Black Friday weekend. Lost revenue: ~$2.1M. '
+            sets: (f, st) => ({ terminalsWiped: true, posLoss: f.posLoss + 2100000 + ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock) }),
+            outcome: f => 'Reimaging 347 terminals across 52 locations takes the rest of the weekend. Stores open Saturday and Sunday cash-only while their lanes are reimaged in turn. Lost revenue: ~$2.1M. '
               + (f.forensicsDone || f.memCaptured
                 ? 'The terminals\' own forensic state is destroyed — the images you already took are all the PFI will get. '
                 : 'Forensic evidence on the terminals is destroyed. ')
               + 'The staging server, shared credentials, flat network, plaintext keys and POS-MGMT-01 itself are all untouched. You\'ve cleaned the symptoms but not the disease.',
           },
         ],
-        live: (f, st) => `CARD ACCEPTANCE SUSPENDED AT 52 STORES · ${fmtUSD(ddosStoreLoss(52, st.phaseClock))} LOST WHILE YOU DECIDE`,
+        live: (f, st) => `CARD ACCEPTANCE SUSPENDED AT 52 STORES · ${fmtUSD(ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock))} LOST WHILE YOU DECIDE`,
         timeline: [
           { at: 6, sev: 'info', text: 'Stores: cash-only lines out the door at 12 locations' },
           { at: 15, sev: 'warn', text: 'Regional VPs escalate to the CEO: "reopen the registers"', score: { time: -3 } },
@@ -616,7 +625,7 @@ registerIncident(
 
 <span class="log-warn">BUSINESS IMPACT:</span>
   - DDoS e-commerce revenue loss: ~${fmtUSD(ddosEcomLoss(f))} (${(128 + f.ddosEndT) / 60} hours × $42K)
-  - POS offline revenue loss: ${fmtUSD(f.posLoss)} so far, accumulating (~$85K/hour across 52 stores)
+  - POS offline revenue loss: ${fmtUSD(f.posLoss)} so far, accumulating (~$85K per open hour across 52 stores)
   - Black Friday weekend: highest revenue period of the year
   - Card brand fines: TBD
   - Breach notification costs: TBD (~${ddosN(ddosScopeCards(f))} affected cardholders${ddosPreciseScope(f) ? '' : ', unscoped'})
@@ -638,7 +647,8 @@ registerIncident(
               mgmtBackdoor: false,
               mgmtRebuilt: f.mgmtRebuilt || f.mgmtBackdoor,
               brandNotice: 'ontime',
-              posLoss: f.posLoss + 425000 + ddosStoreLoss(52, st.phaseClock),
+              // 5 pilot stores back after 2 hours, the other 47 in waves over the next 4
+              posLoss: f.posLoss + ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock + 120) + 0.5 * ddosStoreLoss(47, st.elapsed + st.phaseClock + 120, st.elapsed + st.phaseClock + 360),
             }),
             outcome: f => (f.mgmtBackdoor
                 ? 'The pilot\'s enhanced monitoring flags POS-MGMT-01\'s outbound tunnel within minutes. You pull it, rebuild it from clean media and re-verify the pilot stores before wave two — the attacker never gets to push again. '
@@ -661,7 +671,7 @@ registerIncident(
             // A live backdoor means a re-push to 60 terminals for 40 minutes before DNS monitoring catches the new domain
             sets: (f, st) => ({
               brandNotice: 'tight',
-              posLoss: f.posLoss + 170000 + ddosStoreLoss(52, st.phaseClock),
+              posLoss: f.posLoss + ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock + 60),
               extraSwipes: f.extraSwipes + (f.mgmtBackdoor ? 2400 : 0),
               mgmtRebuilt: f.mgmtRebuilt || f.mgmtBackdoor,
               mgmtBackdoor: false,
@@ -679,12 +689,11 @@ registerIncident(
             desc: 'Don\'t process a single card until the forensic investigation confirms the environment is clean.',
             quality: 'bad',
             score: { time: -15, containment: 10, evidence: 5, thoroughness: -10 },
-            sets: (f, st) => ({ pfiDisrupted: true, brandNotice: 'ontime', posLoss: f.posLoss + 10200000 + ddosStoreLoss(52, st.phaseClock) }),
-            outcome: f => 'PFI takes 5 days to complete initial assessment. All 52 stores can\'t process cards for the entire Black Friday weekend plus Cyber Monday. Revenue loss: ~$10.2M. The CEO overrides you on day 2, creating a chaotic emergency restoration without proper procedures. The PFI\'s investigation is disrupted by the mid-stream restart.'
-              + (f.mgmtBackdoor ? ' Nobody looks at POS-MGMT-01 in the scramble; its tunnel stays up.' : ''),
+            sets: (f, st) => ({ pfiDisrupted: true, brandNotice: 'ontime', posLoss: f.posLoss + ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock + 5 * 1440) }),
+            outcome: (f, st) => `PFI takes 5 days to complete initial assessment. All 52 stores can't process cards for the entire Black Friday weekend plus Cyber Monday. Revenue loss: ~${fmtUSD(ddosStoreLoss(52, st.elapsed, st.elapsed + 5 * 1440))}. The CEO overrides you on day 2, creating a chaotic emergency restoration without proper procedures. The PFI's investigation is disrupted by the mid-stream restart.${f.mgmtBackdoor ? ' Nobody looks at POS-MGMT-01 in the scramble; its tunnel stays up.' : ''}`,
           },
         ],
-        live: (f, st) => `POS OFFLINE AT 52 STORES · ${fmtUSD(f.posLoss + ddosStoreLoss(52, st.phaseClock))} LOST TO POS DOWNTIME SO FAR`,
+        live: (f, st) => `POS OFFLINE AT 52 STORES · ${fmtUSD(f.posLoss + ddosStoreLoss(52, st.elapsed, st.elapsed + st.phaseClock))} LOST TO POS DOWNTIME SO FAR`,
         timeline: [
           { at: 10, sev: 'warn', text: 'CEO: "Every hour is $85K. I need a plan in front of me."', score: { time: -3 } },
         ],

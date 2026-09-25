@@ -50,7 +50,7 @@ registerIncident(
     // In-world "today": every date in this file is written relative to it and
     // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
     baseDate: '2024-03-10',
-    assignedTime: '13:55 UTC',
+    assignedTime: '13:55 ET',
     summary: 'Zero-day deserialization vulnerability in client portal (Java-based). Attacker achieved remote code execution, deployed webshell, and is actively dumping the case management database containing privileged attorney-client communications.',
     iocs: [
       { type: 'FILE', val: '/opt/tomcat/webapps/ROOT/images/logo.jsp — webshell' },
@@ -366,7 +366,7 @@ registerIncident(
             const mem = f.memCaptured
               ? `  PORTAL-PROD-01 memory (Volatility linux.hidden_modules):
     nf_conntrack_ext — hidden from lsmod, hooks getdents64 + tcp4_seq_show<!--f:rootkit-->
-    loaded 12:19 from /lib/modules/5.15.0-76/extra/, reloads via /etc/modules-load.d/<!--f:rootkit-->`
+    loaded 12:19 from /lib/modules/5.15.0-69/extra/, reloads via /etc/modules-load.d/<!--f:rootkit-->`
               : f.ramLost
                 ? '  PORTAL-PROD-01 memory: not available (host powered off at triage)'
                 : '  PORTAL-PROD-01 memory: not captured';
@@ -587,6 +587,8 @@ ${mem}${f.ramLost ? '' : `
       },
       { // RECOVERY
         name: 'RECOVERY',
+        // Waiting on the vendor patch keeps the portal dark for two or three weeks
+        at: (f, st) => f.portalOffline ? st.elapsed + (f.saw_endpoint ? 14 : 21) * 1440 : 0,
         carried: f => {
           const out = [];
           if (f.dbPersist) out.push({
@@ -701,6 +703,8 @@ ${mem}${f.ramLost ? '' : `
       },
       { // POST-INCIDENT
         name: 'POST-INCIDENT',
+        // The review follows the day-3 bypass and the extra day of downtime it caused
+        at: (f, st) => f.virtualPatch === 'generic' ? st.elapsed + 4 * 1440 : 0,
         carried: f => {
           const out = [];
           const n = wrcFolders(f.exfilMin);

@@ -10,7 +10,7 @@ const BOOT_LINES = [
   ['Loading SIEM connectors...', 'ok', '[ OK ]'],
   ['Connecting to Sentinel / Splunk / Elastic...', 'ok', '[ OK ]'],
   ['Loading threat intelligence feeds...', 'ok', '[ OK ]'],
-  ['Syncing MITRE ATT&CK framework v14.1...', 'ok', '[ OK ]'],
+  ['Syncing MITRE ATT&CK framework v19.2...', 'ok', '[ OK ]'],
   ['Loading incident playbooks...', 'ok', '[ OK ]'],
   ['Checking analyst certifications...', 'warn', '[ WARN ]'],
   ['Establishing customer VPN tunnels...', 'ok', '[ OK ]'],
@@ -188,9 +188,10 @@ function fmtUSD(n) {
 }
 
 function formatElapsed(mins) {
-  const h = Math.floor(mins / 60);
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor(mins / 60) % 24;
   const m = mins % 60;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  return `${d ? d + 'd ' : ''}${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
 
 function addSiemEntry(time, sev, text) {
@@ -548,6 +549,25 @@ function renderPhase() {
       }).join('')}
     </div>` : '';
 
+  // ── STORY ANCHOR ──
+  // A phase begins no earlier than its story time, so the wall clock (SIEM stamps,
+  // "time on incident") agrees with the narrative: `phase.at` (minutes since
+  // assignment, value or function), or by default the phase's first authored
+  // SIEM time. A player slower than the story keeps the later wall clock.
+  const entries = resolve(phase.siemEntries);
+  const authored = [];
+  entries.forEach((e, i) => {
+    let t = hhmmToMin(e.time);
+    const prev = authored.slice().reverse().find(x => x != null);
+    if (t != null && prev != null && t < prev - 720) t += 1440;
+    authored.push(t);
+  });
+  const first = authored.find(x => x != null);
+  const assigned = hhmmToMin(STATE.incident.assignedTime) ?? 0;
+  const storyAt = phase.at != null ? resolve(phase.at)
+    : first == null ? null : (((first - assigned) % 1440) + 1440) % 1440;
+  if (storyAt != null && storyAt > STATE.elapsed) STATE.elapsed = storyAt;
+
   const evidence = resolve(phase.evidence);
   const evidenceHtml = renderEvidence(resolve(evidence.content));
   STATE.choiceOrder = null;
@@ -581,15 +601,6 @@ function renderPhase() {
   // Add SIEM entries for this phase
   // Authored entries keep their spacing but slide onto the incident's actual clock:
   // the phase's first entry lands on "now" (times wrapping past midnight unwrap first)
-  const entries = resolve(phase.siemEntries);
-  const authored = [];
-  entries.forEach((e, i) => {
-    let t = hhmmToMin(e.time);
-    const prev = authored.slice().reverse().find(x => x != null);
-    if (t != null && prev != null && t < prev - 720) t += 1440;
-    authored.push(t);
-  });
-  const first = authored.find(x => x != null);
   const phaseStart = STATE.elapsed;
   entries.forEach((e, i) => {
     const stamp = authored[i] == null ? e.time : wallStamp(phaseStart + authored[i] - first);
