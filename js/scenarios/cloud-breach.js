@@ -1,7 +1,7 @@
 // Cloud Infrastructure Breach — AWS Credential Compromise
 // Scenario data for PumaResponse — format documented in README → Development.
 
-// CLOUD_BREACH: game minute 0 is the 06:45 UTC handoff; st.elapsed + st.phaseClock is "now".
+// CLOUD_BREACH: game minute 0 is the 06:45 handoff; st.elapsed + st.phaseClock is "now".
 // Mining is priced per p3.8xlarge-hour (on-demand, us-east-1); 16 of them is the $196/hour at handoff.
 const CB_P3_HOURLY = 12.24;
 function cbNow(st) { return st.elapsed + st.phaseClock; }
@@ -76,13 +76,13 @@ registerIncident(
     // In-world "today": every date in this file is written relative to it and
     // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
     baseDate: '2024-03-20',
-    assignedTime: '06:45 UTC',
-    summary: 'AWS access keys leaked in public GitHub repo. Attacker created new IAM users, spun up crypto miners, and accessed RDS databases containing payment card data. CloudTrail shows privilege escalation to admin.',
+    assignedTime: '06:45 ET',
+    summary: 'AWS access keys leaked in a public GitLab.com project. Attacker created new IAM users, spun up crypto miners, and accessed RDS databases containing payment card data. CloudTrail shows privilege escalation to admin.',
     iocs: [
-      { type: 'IAM KEY', val: 'AKIA3EXAMPLE7COMPROMISED — leaked in GitHub commit' },
+      { type: 'IAM KEY', val: 'AKIA3EXAMPLE7CMPRMSD — pushed to a public GitLab.com project' },
       { type: 'IAM USER', val: 'admin-backup-svc — attacker-created IAM user' },
       { type: 'IP', val: '45.155.205.99 — API calls from Tor exit node' },
-      { type: 'EC2', val: 'i-0deadbeef1234 — unauthorized p3.8xlarge (crypto mining)' },
+      { type: 'EC2', val: 'i-0deadbeef12345678 — unauthorized p3.8xlarge (crypto mining)' },
       { type: 'S3', val: 'novapay-prod-cardholder-data — public ACL detected' },
     ],
     // Run state. Every later phase reads these; choices change them via `sets`.
@@ -121,6 +121,7 @@ registerIncident(
       returnVia: '',
       returnSpend: 0,         // GPU spend from the return visit
       sessionSpend: 0,        // GPU spend on the leftover session token
+      containedAt: 0,         // game minute the Containment action landed
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
@@ -160,15 +161,15 @@ registerIncident(
     phases: [
       { // TRIAGE
         name: 'TRIAGE',
-        narrative: 'AWS GuardDuty fires a high-severity alert: IAM access keys associated with a NovaPay developer are being used from a Tor exit node to make API calls including ec2:RunInstances and iam:CreateUser. You check GitHub and find the keys were committed to a public repository 4 hours ago in a .env file.',
+        narrative: 'AWS GuardDuty fires a high-severity alert: IAM access keys associated with a NovaPay developer are being used from a Tor exit node to make API calls including ec2:RunInstances and iam:CreateUser. You check the developer\'s git remotes and find the keys were pushed to a public GitLab.com project 4 hours ago in a .env file — outside GitHub\'s secret-scanning partnership with AWS, so no quarantine policy ever landed on the key.',
         evidence: {
           title: 'GUARDDUTY + CLOUDTRAIL ALERTS',
-          content: `<span class="log-warn">[02:33]</span> GitHub commit 4f1e9c2: novapay/payment-gateway (PUBLIC repo)
+          content: `<span class="log-warn">[02:33]</span> GitLab.com push 4f1e9c2: novapay/payment-gateway (PUBLIC project)
   File: .env.production — contains AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
   <span class="log-highlight">Exposed for 4 hours before detection</span>
 <span class="log-warn">[02:41]</span> GuardDuty Recon:EC2/PortProbeUnprotectedPort — bastion-01 (sev 2.0, recurring)
 <span class="log-warn">[02:51]</span> <span class="log-highlight">GuardDuty</span> UnauthorizedAccess:IAMUser/TorIPCaller
-  Key: AKIA3EXAMPLE7COMPROMISED (user: dev-jpark)<!--f:torKey-->
+  Key: AKIA3EXAMPLE7CMPRMSD (user: dev-jpark)<!--f:torKey-->
   Source: 45.155.205.99 (Tor exit node)<!--f:torKey-->
 <span class="log-warn">[02:51]</span> API: sts:GetSessionToken — DurationSeconds=129600 (36h)<!--f:stsSession-->
   Returned: ASIA3EXAMPLE9SESSION, expires Mar 21 14:51<!--f:stsSession-->
@@ -208,8 +209,8 @@ registerIncident(
           },
           {
             key: 'C',
-            label: 'Delete the .env file from GitHub and force-push to remove it from history',
-            desc: 'Remove the leaked credentials from GitHub so no one else can find them.',
+            label: 'Delete the .env file from the repo and force-push to remove it from history',
+            desc: 'Remove the leaked credentials from GitLab so no one else can find them.',
             quality: 'bad',
             score: { time: -15, containment: -20, evidence: -5, thoroughness: -10 },
             // Nobody touches IAM for another 90 minutes; the attacker scales up and wipes logs unopposed
@@ -231,7 +232,7 @@ registerIncident(
             },
             outcome: (f, st) => {
               const grown = Math.max(f.minerCount, 48);
-              return `The keys are removed from GitHub but still active in AWS. The attacker has had them for 4 hours already — removing the public exposure doesn't revoke the keys, and anyone who scraped the repo still has them. Meanwhile, the attacker scales to ${grown} GPU instances across ${Math.max(f.minerRegions, 6)} regions, stops CloudTrail logging, deletes the RDS audit log group, and downloads 2 GB more from the cardholder data bucket. The mining bill hits ${fmtUSD(cbMinerSpend(f, st) + grown * CB_P3_HOURLY * 1.5)} before you realize, 90 minutes later, that the keys need to be deactivated in IAM.`;
+              return `The keys are removed from GitLab.com but still active in AWS. The attacker has had them for 4 hours already — removing the public exposure doesn't revoke the keys, and anyone who scraped the repo still has them. Meanwhile, the attacker scales to ${grown} GPU instances across ${Math.max(f.minerRegions, 6)} regions, stops CloudTrail logging, deletes the RDS audit log group, and downloads 2 GB more from the cardholder data bucket. The mining bill hits ${fmtUSD(cbMinerSpend(f, st) + grown * CB_P3_HOURLY * 1.5)} before you realize, 90 minutes later, that the keys need to be deactivated in IAM.`;
             },
           },
           {
@@ -261,7 +262,7 @@ registerIncident(
         ],
         siemEntries: [
           { time: '06:45', sev: 'crit', text: 'INCIDENT ASSIGNED — Cloud Breach — NovaPay Financial' },
-          { time: '06:45', sev: 'warn', text: 'AWS access keys leaked in public GitHub repository' },
+          { time: '06:45', sev: 'warn', text: 'AWS access keys leaked in a public GitLab.com project' },
           { time: '06:46', sev: 'crit', text: 'Attacker created admin IAM user — full privilege escalation' },
           { time: '06:47', sev: 'warn', text: '16x p3.8xlarge crypto miners running in 2 regions — $196/hour' },
         ],
@@ -320,7 +321,7 @@ registerIncident(
             quality: 'good',
             score: { time: 10, containment: 25, evidence: 10, thoroughness: 15 },
             sets: (f, st) => ({
-              ...cbMiners(f, st, 0, 0),
+              ...cbMiners(f, st, 0, 0), containedAt: cbNow(st),
               backdoor1Live: false, backdoor2Live: false,
               dbExposed: false, s3Public: false, s3PublicMin: 225 + cbNow(st),
               snapDeleted: true, trailRestarted: f.trailStopped,
@@ -343,7 +344,7 @@ registerIncident(
             quality: 'partial',
             score: { time: 10, containment: 10, evidence: 5, thoroughness: -5 },
             sets: (f, st) => ({
-              ...cbMiners(f, st, 0, 0),
+              ...cbMiners(f, st, 0, 0), containedAt: cbNow(st),
               backdoor1Live: false, backdoor2Live: false,
               snapDeleted: !!f.saw_manualSnap,
               dbReaccessed: true,
@@ -365,10 +366,11 @@ registerIncident(
               minerSpend: cbMinerSpend(f, st) + f.minerCount * CB_P3_HOURLY * 2.5,
               minerCount: 0,
               minerAt: cbNow(st) + 150,
+              containedAt: cbNow(st),
               prodOutage: true,
               dbReaccessed: true,
             }),
-            outcome: f => 'The SCP denies iam:* and sts:* — and that includes sts:AssumeRole, which every ECS task and instance role in NovaPay\'s production account uses to refresh its credentials. As those credentials age out, the payment processing system goes down, affecting thousands of transactions. You have to partially roll back the lockdown to restore service, creating a confusing window of mixed state. And an SCP only filters API calls: lambda-monitoring-role\'s existing access keys still work for EC2, S3 and RDS, and CloudWatchSync resumes minting keys the moment IAM is allowed again.'
+            outcome: f => 'The SCP denies iam:* and sts:* — and NovaPay\'s payment gateway calls sts:AssumeRole into the processor\'s cross-account role for every settlement batch. Those calls fail at once and settlement stops: the payment processing system goes down, affecting thousands of transactions. You have to partially roll back the lockdown to restore service, creating a confusing window of mixed state. And an SCP only filters API calls: lambda-monitoring-role\'s existing access keys still work for EC2, S3 and RDS, and CloudWatchSync resumes minting keys the moment IAM is allowed again.'
               + (f.minerCount ? ` Nothing in the lockdown touches the ${f.minerCount} running miners; they run another 2.5 hours.` : '')
               + ' The security group and S3 issues remain.',
           },
@@ -380,7 +382,7 @@ registerIncident(
             quality: 'good',
             score: { time: 10, containment: 30, evidence: 10, thoroughness: 20 },
             sets: (f, st) => ({
-              ...cbMiners(f, st, 0, 0),
+              ...cbMiners(f, st, 0, 0), containedAt: cbNow(st),
               backdoor1Live: false, backdoor2Live: false, stsLive: false,
               dbExposed: false, s3Public: false, s3PublicMin: 225 + cbNow(st),
               snapDeleted: true, trailRestarted: f.trailStopped,
@@ -620,12 +622,12 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
         narrative: f => (f.proof === 'misclassified'
           ? 'The investigation classed this as resource abuse. '
           : 'The investigation has scoped the breach. ')
-          + 'Now ensure every trace of the compromise is removed and the systemic vulnerabilities that enabled it are fixed. The GitHub repo still has credentials in its history.',
+          + 'Now ensure every trace of the compromise is removed and the systemic vulnerabilities that enabled it are fixed. The public repo still has credentials in its history.',
         evidence: {
           title: 'VULNERABILITY & REMEDIATION INVENTORY',
           content: f => `<span class="log-highlight">ROOT CAUSES:</span>
   [1] Hardcoded credentials in source code (.env committed to Git)
-  [2] GitHub repo was PUBLIC (should be private)
+  [2] GitLab project was PUBLIC (should be private)
   [3] IAM user had overly permissive policies (EC2, IAM, RDS, S3 full access)
   [4] No SCPs limiting dangerous actions (iam:CreateUser, ec2:RunInstances)
   [5] S3 bucket allowed public ACLs (Block Public Access not enabled)
@@ -635,7 +637,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
   [9] RDS audit logs deletable by any admin principal (no export, no retention lock)` : ''}
 
 <span class="log-highlight">REMAINING CLEANUP:</span>
-  - GitHub: .env in git history (all branches)
+  - GitLab: .env in git history (all branches)
   - AWS: 14 other IAM users with long-lived access keys (no rotation)
   - 3 other S3 buckets without Block Public Access
   - No secrets management solution (credentials in .env files throughout codebase)${f.backdoor2Live ? `
@@ -651,7 +653,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
         choices: [
           {
             key: 'A',
-            label: 'Purge GitHub history, rotate all IAM keys, enable S3 Block Public Access, deploy secrets manager',
+            label: 'Purge git history, rotate all IAM keys, enable S3 Block Public Access, deploy secrets manager',
             desc: 'Comprehensive remediation: clean git history, rotate every access key, enable preventive controls, and deploy HashiCorp Vault or AWS Secrets Manager.',
             quality: 'good',
             score: { time: 5, containment: 15, evidence: 5, thoroughness: 20 },
@@ -672,7 +674,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
           },
           {
             key: 'B',
-            label: 'Rotate the compromised keys, fix the GitHub repo, and enable S3 Block Public Access',
+            label: 'Rotate the compromised keys, fix the repo, and enable S3 Block Public Access',
             desc: 'Fix the immediate issues. Leave the broader credential management problem for a security project.',
             quality: 'partial',
             score: { time: 10, containment: 5, evidence: 0, thoroughness: 5 },
@@ -680,7 +682,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
               ...cbAfterEradication(f),
               s3Public: false, s3PublicMin: f.s3Public ? 225 + cbNow(st) : f.s3PublicMin,
             }),
-            outcome: f => 'Immediate gaps closed. But 13 other IAM users still have long-lived, unrotated keys — any future leak repeats this scenario. No secrets management means developers continue putting credentials in code. No SCPs means nothing prevents an attacker from escalating privileges or exposing resources again.'
+            outcome: f => 'Immediate gaps closed. But 14 other IAM users still have long-lived, unrotated keys — any future leak repeats this scenario. No secrets management means developers continue putting credentials in code. No SCPs means nothing prevents an attacker from escalating privileges or exposing resources again.'
               + (f.stsLive ? ' And rotating dev-jpark\'s keys a second time does nothing to the session token already issued from the first ones.' : '')
               + (f.backdoor1Live || f.backdoor2Live ? ` ${cbFootholds(f, false).join(' and ')} ${cbFootholds(f, false).length > 1 ? 'are' : 'is'} not on anyone's list.` : ''),
           },
@@ -796,7 +798,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
             score: { time: 10, containment: 0, evidence: 5, thoroughness: 5 },
             sets: { brandsNotified: true, pfiEngaged: true, consumerLate: true },
             outcome: f => (f.brandsNotified ? 'Card brands notified on time. ' : 'Card brands notified — late, after the resource-abuse call. ')
-              + 'PFI begins investigation. But state breach notification deadlines vary — several states require notification within 30 days. Waiting for the PFI to finish (typically 6-8 weeks) means missing deadlines in New York, California, and other states with early notification requirements.',
+              + 'PFI begins investigation. But state breach notification deadlines vary — several states require notification within 30 days. Waiting for the PFI to finish (typically 6-8 weeks) means missing the 30-day deadlines in New York, Colorado, Florida and other states with fixed windows.',
           },
           {
             key: 'C',
@@ -838,12 +840,12 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
             const fines = cbFines(f);
             const total = 180000 + fines + 6300000 + 350000 + mining;
             return `<span class="log-ok">TIMELINE:</span>
-  Credential leak:   Mar 20 02:33 (GitHub commit)
+  Credential leak:   Mar 20 02:33 (public git push)
   Attacker access:   Mar 20 02:51 (18 min after leak)
   Privilege escalation: Mar 20 02:52 (1 min after access)
   Data access:       Mar 20 03:10 (19 min after access)
   Detection:         Mar 20 06:45 (4 hours after leak)
-  Containment:       Mar 20 ~07:00
+  Containment:       Mar 20 ~${cbClock(f.containedAt)}
   Time on incident:  ${formatElapsed(st.elapsed)}
 
 <span class="log-warn">KEY FAILURES:</span>
@@ -880,7 +882,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
               return (st.findings.length >= 6
                   ? `The evidence appendix lists ${st.findings.length} findings you documented during the response — the PFI cites it directly. `
                   : `The evidence appendix is thin — ${st.findings.length} documented finding${st.findings.length === 1 ? '' : 's'} — and the PFI builds its own timeline instead of using yours. `)
-                + 'Report drives a complete cloud security transformation: secrets management mandatory, pre-commit hooks scanning for credentials, GitHub org-level controls preventing public repos, IAM privilege boundaries, SCPs preventing dangerous operations, comprehensive CloudTrail logging with log files locked in a separate account, and real-time alert routing. '
+                + 'Report drives a complete cloud security transformation: secrets management mandatory, pre-commit hooks scanning for credentials, GitLab group-level visibility controls preventing public projects, IAM privilege boundaries, SCPs preventing dangerous operations, comprehensive CloudTrail logging with log files locked in a separate account, and real-time alert routing. '
                 + (f.brandsLate || f.attackerReturned
                   ? `The QSA accepts the plan, but PCI status is still ${cbPciStatus(f).toLowerCase()} — no report fixes that.`
                   : `PCI QSA is satisfied with the remediation plan. The ~$${(total / 1e6).toFixed(1)}M lesson results in a genuinely secure cloud environment.`);

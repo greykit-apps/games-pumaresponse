@@ -42,7 +42,7 @@ Seven incident scenarios. By default one is picked at random from those you have
 | **Business Email Compromise (BEC/CEO Fraud)** | HIGH | $340K wire transfer initiated via spoofed CEO email. Within the recall window. Credential compromise confirmed. |
 | **Supply Chain Compromise** | CRITICAL | Trusted RMM vendor pushes backdoored update to 340+ endpoints at a healthcare org. Patient data at risk. HIPAA implications. |
 | **Insider Threat** | HIGH | Departing engineer exfiltrates ITAR-controlled avionics designs to a foreign-owned competitor. FBI referral at stake. |
-| **Cloud Infrastructure Breach** | CRITICAL | AWS access keys leaked in a public GitHub repo. Crypto miners, IAM escalation, and 2.1M payment card records exposed. PCI-DSS breach. |
+| **Cloud Infrastructure Breach** | CRITICAL | AWS access keys leaked in a public GitLab repo. Crypto miners, IAM escalation, and 2.1M payment card records exposed. PCI-DSS breach. |
 | **DDoS Smokescreen** | CRITICAL | Volumetric DDoS masks a simultaneous SQL injection and POS malware deployment across 52 retail locations on Black Friday. |
 | **Web Application RCE** | CRITICAL | Zero-day deserialization exploit on a law firm's client portal. Attacker gains root, dumps attorney-client privileged case files. |
 
