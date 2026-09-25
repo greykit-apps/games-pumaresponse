@@ -1157,9 +1157,21 @@ function openHelp() {
     $('help-next').focus({ preventScroll: true });
   }, 220);
 }
+// The tour opens by itself when a player starts their first incident. It counts
+// as seen once closed (Exit, Done or Esc); Reset Progress clears the flag.
+const HELP_SEEN_KEY = 'pumaresponse.helpSeen';
+let helpSeenThisPage = false; // stands in when the browser won't store the flag
+function helpSeen() {
+  try { return helpSeenThisPage || localStorage.getItem(HELP_SEEN_KEY) === '1'; } catch (e) { return helpSeenThisPage; }
+}
+function markHelpSeen() {
+  helpSeenThisPage = true;
+  try { localStorage.setItem(HELP_SEEN_KEY, '1'); } catch (e) {}
+}
 function closeHelp() {
   const overlay = $('help-overlay');
   if (overlay.hidden) return;
+  markHelpSeen();
   overlay.classList.remove('open');
   overlay.hidden = true;
   if (helpTab) helpShowPanel(helpTab);
@@ -1268,12 +1280,13 @@ function resetAllData() {
   STATE.siemTimers = [];
   STATE.played.clear();
   STATE.clockMode = 'realtime';
+  helpSeenThisPage = false; // the help tour runs again on the next first incident
   STATE.started = false;
   STATE.incident = null;
   $('game-screen').classList.remove('visible');
   $('end-screen').classList.remove('visible');
   openMenu();
-  $('menu-warning').textContent = 'Progress reset: personal bests and settings deleted from this browser.';
+  $('menu-warning').textContent = 'Progress reset: personal bests and settings deleted from this browser. The help tour will run again on your next incident.';
 }
 $('menu-reset').addEventListener('click', () => {
   const btn = $('menu-reset');
@@ -1292,6 +1305,8 @@ function restartWith(incident) {
   startGame(incident);
   const first = document.querySelector('.choice-btn');
   if (first) first.focus();
+  // First incident ever: let the screen appear, then run the help tour over it
+  if (!helpSeen()) setTimeout(() => { if (!helpSeen()) openHelp(); }, 700);
 }
 
 $('menu-btn').addEventListener('click', (e) => { e.stopPropagation(); openMenu(); });
