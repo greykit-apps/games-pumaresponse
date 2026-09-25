@@ -7291,6 +7291,21 @@ function advancePhase() {
 
 // ── END GAME ───────────────────────────────────────
 const GRADE_BANDS = { A: 85, B: 65, C: 45, D: 25 }; // % of the scenario's bestScore
+
+// Best result per scenario, remembered in this browser only (a convenience —
+// if storage is unavailable the game simply doesn't remember).
+function loadBests() {
+  try { return JSON.parse(localStorage.getItem('pumaresponse.best') || '{}') || {}; } catch (e) { return {}; }
+}
+function recordBest(id, grade, pct) {
+  const bests = loadBests();
+  const isNew = !bests[id] || pct > bests[id].pct;
+  if (isNew) {
+    bests[id] = { grade, pct };
+    try { localStorage.setItem('pumaresponse.best', JSON.stringify(bests)); } catch (e) {}
+  }
+  return isNew;
+}
 function endGame() {
   $('game-screen').classList.remove('visible');
 
@@ -7318,6 +7333,9 @@ function endGame() {
     grade = 'F'; gradeClass = 'red'; titleText = 'RESPONSE FAILURE'; titleClass = 'failure';
     subtitle = 'Critical errors throughout the response resulted in maximum damage, destroyed evidence, and a very unhappy client. Your MSSP manager would like a word.';
   }
+
+  const prevBest = loadBests()[STATE.incident.id];
+  const newBest = recordBest(STATE.incident.id, grade, pct);
 
   $('end-title').textContent = titleText;
   $('end-title').className = `end-title ${titleClass}`;
@@ -7354,6 +7372,7 @@ function endGame() {
       <div>
         <div class="sc-grade-label">OVERALL GRADE</div>
         <div style="font-size:12px;color:var(--green-dim);">${total} points · ${pct}% of best possible</div>
+        <div style="font-size:11px;color:var(--amber);">${newBest ? (prevBest ? `NEW PERSONAL BEST — was ${prevBest.grade} (${prevBest.pct}%)` : 'FIRST CLEAR — PERSONAL BEST RECORDED') : `PERSONAL BEST: ${prevBest.grade} (${prevBest.pct}%)`}</div>
       </div>
     </div>
   `;
@@ -7556,12 +7575,13 @@ function openMenu() {
     ? `${inc.ticketId} is still open (phase ${STATE.phaseIdx + 1} of ${PHASE_NAMES.length}). Starting another incident abandons it — progress is lost.`
     : '';
   $('menu-replay').textContent = `↺ REPLAY ${inc.ticketId}`;
+  const bests = loadBests();
   $('scenario-list').innerHTML = INCIDENTS.map((i, idx) => `
     <button class="scenario-row${i === inc ? ' current' : ''}" data-idx="${idx}">
       <span class="sr-title">${escapeHtml(i.title)}</span>
       <span class="sr-sev${i.severity === 'CRITICAL' ? ' crit' : ''}">${escapeHtml(i.severity)}</span>
       <span class="sr-client">${escapeHtml(i.client)}</span>
-      <span class="sr-played">${i === inc ? 'CURRENT' : STATE.played.has(i.id) ? 'PLAYED' : ''}</span>
+      <span class="sr-played">${[i === inc ? 'CURRENT' : '', bests[i.id] ? `BEST ${bests[i.id].grade} · ${bests[i.id].pct}%` : STATE.played.has(i.id) ? 'PLAYED' : ''].filter(Boolean).join(' · ')}</span>
     </button>`).join('');
   $('clock-realtime').setAttribute('aria-pressed', String(STATE.clockMode === 'realtime'));
   $('clock-turn').setAttribute('aria-pressed', String(STATE.clockMode === 'turn'));

@@ -47,7 +47,16 @@
     return { bad, res };
   }
 
-  window.harness = function (id, { step = 1, configs } = {}) {
+  // Thousands of simulated games must not overwrite the player's remembered bests
+  const withBestsPreserved = fn => function (...args) {
+    let saved = null;
+    try { saved = localStorage.getItem('pumaresponse.best'); } catch (e) {}
+    try { return fn.apply(this, args); } finally {
+      try { saved === null ? localStorage.removeItem('pumaresponse.best') : localStorage.setItem('pumaresponse.best', saved); } catch (e) {}
+    }
+  };
+
+  window.harness = withBestsPreserved(function (id, { step = 1, configs } = {}) {
     const inc = INCIDENTS.find(i => i.id === id);
     configs = configs || [
       { name: 'rt-none', tag: 'none', mode: 'realtime', dither: 0, sparse: 2 },
@@ -82,13 +91,14 @@
     setClockMode('realtime');
     out.errs = errs.slice(0, 6); out.badCount = allBad.length; out.bad = allBad.slice(0, 8);
     return JSON.stringify(out);
-  };
+  });
+  window.withBestsPreserved = withBestsPreserved;
 })();
 
 // Best achievable total per scenario: every finding tagged, instant decisions,
 // all 729 base paths, with and without taking unlocked D options. Also the
 // "all good choices, nothing tagged" reference and random-play percentiles.
-window.calibrate = function (id) {
+window.calibrate = window.withBestsPreserved(function (id) {
   const inc = INCIDENTS.find(i => i.id === id);
   const totals = []; let best = -1e9, bestPath = '';
   const one = (n, tag, preferD, pickGood) => {
@@ -123,4 +133,4 @@ window.calibrate = function (id) {
     goodNoTag: `${goodNoTag} (${pct(goodNoTag)}%)`, goodTag: `${goodTag} (${pct(goodTag)}%)`,
     random: { p10: pct(pc(0.1)) + '%', p50: pct(pc(0.5)) + '%', p90: pct(pc(0.9)) + '%' },
   };
-};
+});

@@ -24,6 +24,7 @@ Each playthrough assigns one of seven real-world incident scenarios, picked at r
 - **Real-time performance metrics** tracking four scoring dimensions as you play
 - **Dynamic outcome feedback** showing the consequences of each decision with point breakdowns
 - **Phase decision chain** visualizing your choices across all six phases
+- **Personal bests** per scenario, remembered in your browser and shown in the ↺ scenario picker
 - **Full keyboard support** alongside mouse/touch controls
 - **Mobile-responsive** with tab-based panel switching on smaller screens
 
