@@ -576,6 +576,25 @@ body::after {
 .evidence-box .log-highlight { color: var(--red); text-shadow: 0 0 3px var(--red-glow); }
 .evidence-box .log-warn { color: var(--amber); }
 .evidence-box .log-ok { color: var(--green); }
+.ev-hint { float: right; color: var(--green-dim); letter-spacing: 0; }
+.ev-hint b { color: var(--green); font-weight: normal; }
+.ev-taggable .ev-line, .ev-taggable .ev-blank { display: block; }
+.ev-taggable .ev-line {
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  padding-left: 6px;
+  margin-left: -8px;
+}
+.ev-taggable:not(.locked) .ev-line:hover { background: var(--green-bg-dim); }
+.ev-taggable:focus { outline: none; }
+.ev-taggable:focus-visible .ev-line.cursor { outline: 1px dotted var(--green); }
+.ev-taggable .ev-line.finding { border-left-color: var(--green); background: var(--green-bg-faint); }
+.ev-taggable .ev-line.finding::after { content: '  ◆ FINDING'; color: var(--green); font-size: 10px; letter-spacing: 1px; }
+.ev-taggable .ev-line.noise { border-left-color: var(--red-dim); opacity: 0.6; }
+.ev-taggable .ev-line.noise::after { content: '  ✗ FALSE LEAD'; color: var(--red); font-size: 10px; letter-spacing: 1px; }
+.ev-taggable.locked .ev-line { cursor: default; }
+.choice-btn.unlocked { border-style: dashed; border-color: var(--green); }
+.choice-btn .unlock-tag { display: block; font-size: 10px; letter-spacing: 1px; color: var(--green); padding-left: 24px; margin-top: 2px; }
 
 /* Choice buttons */
 .choices-container {
@@ -1606,10 +1625,10 @@ const INCIDENTS = [
         evidence: {
           title: 'SUSPICIOUS EMAIL — HEADERS EXTRACT',
           content: `<span class="log-warn">From:</span> David Chen &lt;ceo@ashford-mfg.com&gt;
-<span class="log-warn">Reply-To:</span> <span class="log-highlight">ceo@ashf0rd-mfg.com</span> (note: zero instead of 'o')
+<span class="log-warn">Reply-To:</span> ceo@ashf0rd-mfg.com<!--f:replyTo-->
 <span class="log-warn">Subject:</span> URGENT — Wire Transfer Needed Today
 <span class="log-warn">Date:</span> Thu, 19 Feb 2024 11:48:00 +0000
-<span class="log-warn">X-Originating-IP:</span> 103.145.22.87
+<span class="log-warn">X-Originating-IP:</span> 103.145.22.87<!--f:origIP-->
 
 <span class="log-ok">── EMAIL BODY ──</span>
 Janet,
@@ -1619,15 +1638,15 @@ handle this personally and keep it confidential until I announce.
 I'm in meetings all day — email only please.
 
 Account: First National Bank of Cayman
-Routing: 067014822
-Account: 2847193650
+Routing: 067014822<!--f:beneficiary-->
+Account: 2847193650<!--f:beneficiary-->
 Ref: ASHFORD-ACQ-2024
 
 Thanks,
 David
 
 <span class="log-warn">── AUTHENTICATION ──</span>
-SPF:  <span class="log-highlight">FAIL</span> (ashford-mfg.com does not authorize 103.145.22.87)
+SPF:  <span class="log-highlight">FAIL</span> (ashford-mfg.com does not authorize 103.145.22.87)<!--f:spfFail-->
 DKIM: <span class="log-highlight">NONE</span> (no DKIM signature)
 DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement)`
         },
@@ -1684,20 +1703,20 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
         evidence: {
           title: 'M365 AUDIT LOG — CEO ACCOUNT',
           content: f => `<span class="log-warn">[Feb 17 02:14]</span> Sign-in: ceo@ashford-mfg.com
-  Location: Lagos, Nigeria (IP: 41.190.2.44)
+  Location: Lagos, Nigeria (IP: 41.190.2.44)<!--f:lagos-->
   Status: <span class="log-highlight">SUCCESS</span>
-  MFA: <span class="log-highlight">NOT CONFIGURED</span>
+  MFA: <span class="log-highlight">NOT CONFIGURED</span><!--f:noMfa-->
   Client: Browser (Chrome 121 / Windows)
-<span class="log-warn">[Feb 17 02:16]</span> Inbox Rule Created: "Administrative"
-  Condition: Subject contains "wire" OR "transfer" OR "payment"
-  Action: Move to RSS Feeds, Mark as Read
-<span class="log-warn">[Feb 17 02:18]</span> Mail forwarding: ceo@ashf0rd-mfg.com added
+<span class="log-warn">[Feb 17 02:16]</span> Inbox Rule Created: "Administrative"<!--f:inboxRule-->
+  Condition: Subject contains "wire" OR "transfer" OR "payment"<!--f:inboxRule-->
+  Action: Move to RSS Feeds, Mark as Read<!--f:inboxRule-->
+<span class="log-warn">[Feb 17 02:18]</span> Mail forwarding: ceo@ashf0rd-mfg.com added<!--f:forwarding-->
 <span class="log-warn">[Feb 17 03:00]</span> 847 emails accessed in CEO mailbox
 <span class="log-warn">[Feb 18 11:48]</span> Spoofed email sent externally (from different infra)
 <span class="log-ok">[Feb 19 14:22]</span> Incident reported to MSSP${f.attackerTipped ? `
 <span class="log-warn">[Feb 19 14:31]</span> Sign-in: ceo@ashford-mfg.com from 41.190.2.44
-<span class="log-warn">[Feb 19 14:33]</span> <span class="log-highlight">Security info registered: Authenticator app "iPhone 15"</span>
-  Tenant setting: Self-service password reset ENABLED (1 method)` : ''}`
+<span class="log-warn">[Feb 19 14:33]</span> Security info registered: Authenticator app "iPhone 15"<!--f:authApp-->
+  Tenant setting: Self-service password reset ENABLED (1 method)<!--f:authApp-->` : ''}`
         },
         choices: [
           {
@@ -1726,6 +1745,16 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             score: { time: 5, containment: 15, evidence: -10, thoroughness: -5 },
             sets: { ceoDisabled: true, rulesRemain: true },
             outcome: 'Account disabled — attacker is locked out, but so is the CEO. He\'s on vacation and now can\'t access email, Teams, or OneDrive. Important business communications are disrupted. The inbox rule and forwarding are still configured and will reactivate when the account is re-enabled.',
+          },
+          {
+            key: 'D',
+            when: f => f.saw_authApp,
+            label: 'Full containment, and delete the attacker\'s Authenticator registration first',
+            desc: 'Remove the rogue "iPhone 15" method, then reset password, revoke sessions, remove rules and forwarding, block the typosquat.',
+            quality: 'good',
+            score: { time: 10, containment: 30, evidence: 10, thoroughness: 20 },
+            sets: { mfaBackdoor: false },
+            outcome: 'You pull the attacker\'s Authenticator off the account before touching the password — with it gone, self-service reset has nothing to verify against. Password reset, sessions revoked, inbox rule and forwarding removed, ashf0rd-mfg.com blocked. This time the lockout actually holds.',
           },
         ],
         siemEntries: f => [
@@ -1770,22 +1799,22 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
 <span class="log-warn">[Feb 15 08:33]</span> Email to ceo@ashford-mfg.com
   From: IT-Support@microsoft-365-admin.com
   Subject: "Action Required: Password Expiry Notice"
-  Link: hxxps://microsoft-365-admin[.]com/login
-  <span class="log-highlight">CEO clicked link and entered credentials</span>
+  Link: hxxps://microsoft-365-admin[.]com/login<!--f:phishLink-->
+  <span class="log-highlight">CEO clicked link and entered credentials</span><!--f:credsEntered-->
 
 <span class="log-ok">── SCOPE ANALYSIS ──</span>
   Same phishing campaign sent to: 12 employees
   Clicked link: 4 employees
   Entered credentials: 2 (CEO + VP Sales)
-  VP Sales account: <span class="log-highlight">Also compromised</span>
-    Sign-in from 41.190.2.44 on Feb 17 02:30
+  VP Sales account: <span class="log-highlight">Also compromised</span><!--f:vpSales-->
+    Sign-in from 41.190.2.44 on Feb 17 02:30<!--f:vpSales-->
     No inbox rules created (yet)${f.mfaBackdoor && !f.ceoDisabled ? `
-  CEO account: <span class="log-highlight">SSPR reset Feb 19 15:02 via Authenticator "iPhone 15"</span>` : ''}
+  CEO account: <span class="log-highlight">SSPR reset Feb 19 15:02 via Authenticator "iPhone 15"</span><!--f:sspr-->` : ''}
 
 <span class="log-ok">── CEO MAILBOX ACCESS ──</span>
   Attacker accessed: 847 emails over 2 days
   Categories: Financial reports, board minutes, M&A discussions
-  <span class="log-highlight">Sensitive data exposed: Q4 financials, acquisition target list</span>`
+  <span class="log-highlight">Sensitive data exposed: Q4 financials, acquisition target list</span><!--f:mnpi-->`
         },
         choices: [
           {
@@ -1965,11 +1994,16 @@ ${f.mfaBackdoor ? `
               legalEngaged: true,
               ceoDisabled: false,
               mfaBackdoor: false,
-              wireRecovered: f.wireRecovered + (f.recallFiled ? 0 : 60000),
+              wireRecovered: f.wireRecovered + (!f.recallFiled && f.saw_beneficiary ? 60000 : 0),
             }),
             outcome: f => (f.ceoDisabled ? 'The CEO account is re-enabled with a new password, fresh MFA enrollment and his old security info wiped — the attacker\'s Authenticator goes with it, and the dormant forwarding rule is deleted before it can fire. ' : '')
-              + 'IC3 complaint filed with all IOCs — FBI opens a case and links it to a known West African BEC ring. '
-              + (f.recallFiled ? '' : 'Because the filing lands inside 72 hours, the FBI\'s Recovery Asset Team freezes $60,000 still sitting at an intermediary bank — the first money anyone has clawed back. ')
+              + (f.saw_origIP || f.saw_lagos
+                ? 'IC3 complaint filed with the attacker infrastructure you documented — FBI opens a case and links it to a known West African BEC ring. '
+                : 'IC3 complaint filed, but with no attacker IPs documented it reads as an isolated fraud; nobody connects it to anything bigger. ')
+              + (f.recallFiled ? ''
+                : f.saw_beneficiary
+                  ? 'Because the filing lands inside 72 hours and names the beneficiary account you pulled from the email, the FBI\'s Recovery Asset Team freezes $60,000 still sitting at an intermediary bank — the first money anyone has clawed back. '
+                  : 'The Recovery Asset Team asks for the beneficiary routing and account numbers. Nobody wrote them down, and the CFO\'s copy of the email was deleted in the panic. By the time the bank supplies them, the funds have moved on. ')
               + 'Cyber insurance carrier notified within policy window — claim is accepted. Legal counsel determines SEC notification required due to M&A data exposure and drafts the filing.',
           },
           {
@@ -1978,9 +2012,9 @@ ${f.mfaBackdoor ? `
             desc: 'Handle the financial recovery channels. Let the client handle legal.',
             quality: 'partial',
             score: { time: 10, containment: 0, evidence: 5, thoroughness: 5 },
-            sets: f => ({ wireRecovered: f.wireRecovered + (f.recallFiled ? 0 : 60000) }),
+            sets: f => ({ wireRecovered: f.wireRecovered + (!f.recallFiled && f.saw_beneficiary ? 60000 : 0) }),
             outcome: f => 'IC3 filed and insurance notified — good. '
-              + (f.recallFiled ? '' : 'The FBI Recovery Asset Team freezes $60,000 at an intermediary bank. ')
+              + (f.recallFiled ? '' : f.saw_beneficiary ? 'The FBI Recovery Asset Team freezes $60,000 at an intermediary bank. ' : 'Without the beneficiary details the Recovery Asset Team can\'t act in time. ')
               + 'But without prompting legal review, the client misses the 4-day SEC filing window for material cyber incidents. The SEC later questions the delayed disclosure, adding regulatory risk on top of the financial loss.',
           },
           {
@@ -2048,8 +2082,12 @@ ${f.mfaBackdoor ? `
             label: 'Full report with financial impact, root cause analysis, and security roadmap',
             desc: 'Executive-ready report with attack narrative, financial summary, and 10 prioritized recommendations.',
             quality: 'good',
-            score: { time: 5, containment: 5, evidence: 10, thoroughness: 25 },
-            outcome: f => 'Comprehensive report delivered to the board. Recommendations include: mandatory verbal verification for wire transfers >$10K, DMARC enforcement, MFA for all users, quarterly phishing simulations, and email security gateway upgrade. The board approves a $200K security improvement budget. '
+            // A report is only as good as what was documented along the way
+            score: (f, st) => ({ time: 5, containment: 5, evidence: 10, thoroughness: 15 + Math.min(10, 2 * st.findings.length) }),
+            outcome: (f, st) => (st.findings.length >= 5
+                ? `The IOC appendix lists ${st.findings.length} findings you documented during the response. `
+                : `The IOC appendix is thin — ${st.findings.length} documented finding${st.findings.length === 1 ? '' : 's'} — and the insurer's forensic reviewer notices. `)
+              + 'Comprehensive report delivered to the board. Recommendations include: mandatory verbal verification for wire transfers >$10K, DMARC enforcement, MFA for all users, quarterly phishing simulations, and email security gateway upgrade. The board approves a $200K security improvement budget. '
               + (340000 - f.wireRecovered + (f.vendorFraud ? 87000 : 0) > 150000
                 ? 'But the net loss is hard to read past — the board also asks procurement to put the MSSP contract out to tender.'
                 : 'Your MSSP secures a 2-year managed security contract.'),
@@ -3865,6 +3903,12 @@ const STATE = {
   choices: [],
   flags: {},
   carried: [],
+  findings: [],        // { phase, id, text } — evidence lines correctly tagged
+  findingText: {},     // id -> line text, for every finding the player was shown
+  falseLeads: 0,
+  evLines: null,       // this phase's finding id per evidence line (null = not taggable)
+  evCursor: -1,
+  choiceOrder: null,   // display order of this phase's choices (origIdx)
   played: new Set(),   // incident ids started this session — random picks skip these
   siemTimers: [],      // pending staggered SIEM entries, cleared on restart
   started: false,
@@ -3970,6 +4014,134 @@ function renderScoreTracker() {
   `;
 }
 
+// ── EVIDENCE TAGGING ───────────────────────────────
+// An evidence line may carry a hidden marker, <!--f:id-->. When a phase's evidence
+// has any, every line becomes taggable. Tagging a marked line records a finding and
+// sets flag saw_<id>, which choices and outcomes can read like any other flag.
+// Tagging an unmarked line is a false lead and costs time. Several lines may share
+// an id (one finding spread across a log entry). Evidence without markers renders
+// exactly as before, so scenarios opt in line by line.
+const FINDING_RE = /<!--f:(\w+)-->/;
+const FINDING_REWARD = { evidence: 2 };
+const FALSE_LEAD = { time: -2, minutes: 2 };
+
+function renderEvidence(content) {
+  if (!FINDING_RE.test(content)) { STATE.evLines = null; return `<pre>${content}</pre>`; }
+  const lines = content.split('\n');
+  STATE.evLines = lines.map(l => (l.match(FINDING_RE) || [])[1] || null);
+  STATE.evCursor = -1;
+  const rows = lines.map((l, i) => l.trim()
+    ? `<span class="ev-line" id="ev-line-${i}" role="option" aria-selected="false" data-i="${i}">${l.replace(FINDING_RE, '')}</span>`
+    : '<span class="ev-blank"> </span>').join('');
+  return `<pre class="ev-taggable" id="ev-taggable" tabindex="0" role="listbox" aria-multiselectable="true"
+    aria-label="Evidence lines. Arrow keys move, Enter tags the line as a finding.">${rows}</pre>`;
+}
+
+// Called once the evidence is in the DOM: remember what each finding says (for the debrief)
+function indexFindings() {
+  if (!STATE.evLines) return;
+  STATE.evLines.forEach((id, i) => {
+    if (id && !(id in STATE.findingText)) STATE.findingText[id] = $('ev-line-' + i).textContent.trim();
+  });
+  updateTagCount();
+}
+
+function updateTagCount() {
+  const el = $('ev-hint');
+  if (!el) return;
+  const phase = STATE.incident.phases[STATE.phaseIdx].name;
+  const n = STATE.findings.filter(f => f.phase === phase).length;
+  const k = document.querySelectorAll('.ev-line.noise').length;
+  el.innerHTML = `CLICK LINES TO TAG · <b>${n}</b> finding${n === 1 ? '' : 's'}${k ? ` · ${k} false` : ''}`;
+}
+
+function tagLine(i) {
+  const el = $('ev-line-' + i);
+  if (STATE.awaitingContinue || !STATE.evLines || !el || el.classList.contains('tagged')) return;
+  const phase = STATE.incident.phases[STATE.phaseIdx].name;
+  const id = STATE.evLines[i];
+  const text = el.textContent.trim();
+  const short = text.length > 70 ? text.slice(0, 67) + '...' : text;
+  if (id) {
+    STATE.evLines.forEach((fid, j) => {
+      if (fid !== id) return;
+      $('ev-line-' + j).classList.add('tagged', 'finding');
+      $('ev-line-' + j).setAttribute('aria-selected', 'true');
+    });
+    STATE.flags['saw_' + id] = true;
+    STATE.findings.push({ phase, id, text });
+    Object.entries(FINDING_REWARD).forEach(([k, v]) => { STATE.scores[k] += v; });
+    addNote(phase, `Finding: ${short}`);
+    renderChoices(); // a finding can unlock an option
+  } else {
+    el.classList.add('tagged', 'noise');
+    el.setAttribute('aria-selected', 'true');
+    STATE.falseLeads++;
+    STATE.scores.time += FALSE_LEAD.time;
+    STATE.elapsed += FALSE_LEAD.minutes;
+    $('hdr-elapsed').textContent = formatElapsed(STATE.elapsed);
+    addNote(phase, `False lead: ${short} (${FALSE_LEAD.time} TIME)`);
+  }
+  renderScoreTracker();
+  updateTagCount();
+}
+
+function moveEvCursor(delta) {
+  const idxs = [...document.querySelectorAll('.ev-line')].map(e => +e.dataset.i);
+  if (!idxs.length) return;
+  const pos = idxs.indexOf(STATE.evCursor);
+  const next = idxs[pos < 0 ? 0 : Math.max(0, Math.min(idxs.length - 1, pos + delta))];
+  document.querySelectorAll('.ev-line.cursor').forEach(e => e.classList.remove('cursor'));
+  const el = $('ev-line-' + next);
+  el.classList.add('cursor');
+  el.scrollIntoView({ block: 'nearest' });
+  $('ev-taggable').setAttribute('aria-activedescendant', el.id);
+  STATE.evCursor = next;
+}
+
+$('action-body').addEventListener('click', (e) => {
+  const line = e.target.closest('.ev-line');
+  if (line) tagLine(+line.dataset.i);
+});
+$('action-body').addEventListener('keydown', (e) => {
+  if (e.target.id !== 'ev-taggable') return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); e.stopPropagation();
+    moveEvCursor(e.key === 'ArrowDown' ? 1 : -1);
+  } else if ((e.key === 'Enter' || e.key === ' ') && !STATE.awaitingContinue) {
+    e.preventDefault(); e.stopPropagation();
+    if (STATE.evCursor < 0) moveEvCursor(0); else tagLine(STATE.evCursor);
+  }
+});
+
+// Choices keep their shuffled order for the whole phase; an option unlocked
+// mid-phase is appended rather than reshuffled, so letters don't move under you.
+const CHOICE_KEYS = ['A', 'B', 'C', 'D', 'E'];
+function renderChoices() {
+  const container = $('choices-container');
+  if (!container) return;
+  const phase = STATE.incident.phases[STATE.phaseIdx];
+  const visible = phase.choices.map((c, i) => i).filter(i => !phase.choices[i].when || phase.choices[i].when(STATE.flags, STATE));
+  const unlocked = [];
+  if (!STATE.choiceOrder) { STATE.choiceOrder = shuffle(visible); STATE.unlockedChoices = new Set(); }
+  else visible.forEach(i => {
+    if (STATE.choiceOrder.includes(i)) return;
+    STATE.choiceOrder.push(i); STATE.unlockedChoices.add(i); unlocked.push(i);
+  });
+  const order = STATE.choiceOrder.filter(i => visible.includes(i));
+  container.innerHTML = order.map((i, d) => {
+    const c = phase.choices[i];
+    const isNew = STATE.unlockedChoices.has(i);
+    return `<button class="choice-btn${isNew ? ' unlocked' : ''}" data-idx="${i}" onclick="selectChoice(${i})">
+          <span class="choice-key">[${CHOICE_KEYS[d]}]</span>
+          <span class="choice-label">${escapeHtml(resolve(c.label))}</span>
+          <span class="choice-desc">${escapeHtml(resolve(c.desc))}</span>
+          ${isNew ? `<span class="unlock-tag">◆ UNLOCKED BY YOUR FINDING</span>` : ''}
+        </button>`;
+  }).join('');
+  if (unlocked.length) addNote(phase.name, 'New response option unlocked by your finding');
+}
+
 // ── RENDER PHASE ───────────────────────────────────
 function renderPhase() {
   const phase = STATE.incident.phases[STATE.phaseIdx];
@@ -3999,7 +4171,8 @@ function renderPhase() {
     </div>` : '';
 
   const evidence = resolve(phase.evidence);
-  const visible = phase.choices.map((c, i) => ({ ...c, origIdx: i })).filter(c => !c.when || c.when(STATE.flags, STATE));
+  const evidenceHtml = renderEvidence(resolve(evidence.content));
+  STATE.choiceOrder = null;
 
   body.innerHTML = `
     ${carriedHtml}
@@ -4008,23 +4181,15 @@ function renderPhase() {
       ${escapeHtml(resolve(phase.narrative))}
     </div>
     <div class="evidence-box">
-      <div class="ev-title">${escapeHtml(resolve(evidence.title))}</div>
-      <pre>${resolve(evidence.content)}</pre>
+      <div class="ev-title">${escapeHtml(resolve(evidence.title))}${STATE.evLines ? '<span class="ev-hint" id="ev-hint" aria-live="polite"></span>' : ''}</div>
+      ${evidenceHtml}
     </div>
     <div class="section-title" style="margin-top:12px;">SELECT YOUR RESPONSE</div>
-    <div class="choices-container" id="choices-container" role="group" aria-label="Response choices">
-      ${shuffle(visible)
-        .map((c, displayIdx) => {
-          const keys = ['A','B','C'];
-          return `<button class="choice-btn" data-idx="${c.origIdx}" onclick="selectChoice(${c.origIdx})">
-          <span class="choice-key">[${keys[displayIdx]}]</span>
-          <span class="choice-label">${escapeHtml(resolve(c.label))}</span>
-          <span class="choice-desc">${escapeHtml(resolve(c.desc))}</span>
-        </button>`;
-        }).join('')}
-    </div>
+    <div class="choices-container" id="choices-container" role="group" aria-label="Response choices"></div>
     <div id="outcome-area" aria-live="polite"></div>
   `;
+  renderChoices();
+  indexFindings();
   body.scrollTop = 0; // new phase starts at the top, where carried consequences sit
 
   // Add SIEM entries for this phase
@@ -4077,6 +4242,8 @@ function selectChoice(idx) {
   }).filter(Boolean).join('  ');
 
   // Remove choices section title, choices, and outcome-area — replace with outcome
+  const taggable = $('ev-taggable');
+  if (taggable) taggable.classList.add('locked');
   const choicesContainer = $('choices-container');
   const choicesTitle = choicesContainer.previousElementSibling; // "SELECT YOUR RESPONSE"
   const outcomeArea = $('outcome-area');
@@ -4157,6 +4324,9 @@ function endGame() {
     <div class="sc-row"><span>Incident</span><span class="sc-val">${escapeHtml(STATE.incident.title)}</span></div>
     <div class="sc-row"><span>Client</span><span class="sc-val">${escapeHtml(STATE.incident.client)}</span></div>
     <div class="sc-row"><span>Total Elapsed</span><span class="sc-val">${formatElapsed(STATE.elapsed)}</span></div>
+    ${Object.keys(STATE.findingText).length ? `
+    <div class="sc-row"><span>Findings Tagged</span><span class="sc-val">${STATE.findings.length} of ${Object.keys(STATE.findingText).length}</span></div>
+    <div class="sc-row"><span>False Leads</span><span class="sc-val">${STATE.falseLeads}</span></div>` : ''}
     ${(resolve(STATE.incident.debrief) || []).map(([k, v]) => `<div class="sc-row"><span>${escapeHtml(k)}</span><span class="sc-val">${escapeHtml(v)}</span></div>`).join('')}
     <div class="sc-section">SCORING BREAKDOWN</div>
     <div class="sc-row"><span>Response Time</span><span class="${scoreColor(s.time)}">${s.time > 0 ? '+' : ''}${s.time}</span></div>
@@ -4186,7 +4356,11 @@ function endGame() {
   const consequences = STATE.carried.length ? `
     <div class="end-debrief-header" style="margin-top:12px;">CONSEQUENCES THAT CARRIED FORWARD</div>
     <div class="end-carried">${STATE.carried.map(c => `<div class="carried-item ${c.sev || 'bad'}"><span class="note-phase">[${escapeHtml(c.phase)}]</span> ${escapeHtml(c.text)}</div>`).join('')}</div>` : '';
-  debrief.innerHTML = `<div class="end-debrief-header">PHASE DECISIONS</div>${phases}${consequences}`;
+  const missed = Object.entries(STATE.findingText).filter(([id]) => !STATE.flags['saw_' + id]);
+  const missedHtml = missed.length ? `
+    <div class="end-debrief-header" style="margin-top:12px;">EVIDENCE YOU DIDN'T TAG</div>
+    <div class="end-carried">${missed.map(([, t]) => `<div class="carried-item info">${escapeHtml(t)}</div>`).join('')}</div>` : '';
+  debrief.innerHTML = `<div class="end-debrief-header">PHASE DECISIONS</div>${phases}${consequences}${missedHtml}`;
 
   $('end-screen').classList.add('visible');
   // Focus management: move focus to the end screen for accessibility
@@ -4199,9 +4373,9 @@ document.addEventListener('keydown', (e) => {
   if ($('menu-modal').classList.contains('visible') || $('about-modal').classList.contains('visible')) return;
 
   const key = e.key.toUpperCase();
-  // A/B/C and 1/2/3 select by display position (nth button on screen)
-  if (['A', 'B', 'C'].includes(key) && !STATE.awaitingContinue) {
-    const displayIdx = key.charCodeAt(0) - 65;
+  // A-E and 1-5 select by display position (nth button on screen)
+  if (CHOICE_KEYS.includes(key) && !STATE.awaitingContinue) {
+    const displayIdx = CHOICE_KEYS.indexOf(key);
     const btns = document.querySelectorAll('.choice-btn');
     if (displayIdx < btns.length) {
       selectChoice(parseInt(btns[displayIdx].dataset.idx));
@@ -4214,7 +4388,7 @@ document.addEventListener('keydown', (e) => {
       advancePhase();
     }
   }
-  if (key >= '1' && key <= '3' && !STATE.awaitingContinue) {
+  if (key >= '1' && key <= String(CHOICE_KEYS.length) && key.length === 1 && !STATE.awaitingContinue) {
     const displayIdx = parseInt(key) - 1;
     const btns = document.querySelectorAll('.choice-btn');
     if (displayIdx < btns.length) {
@@ -4250,6 +4424,9 @@ function startGame(incident) {
   STATE.choices = [];
   STATE.flags = { ...(STATE.incident.initialFlags || {}) };
   STATE.carried = [];
+  STATE.findings = [];
+  STATE.findingText = {};
+  STATE.falseLeads = 0;
   STATE.started = true;
 
   // Update header
