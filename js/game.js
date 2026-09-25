@@ -474,7 +474,7 @@ function clockStamp() {
 function clockRunning() {
   return clockActive() && STATE.clockStarted && STATE.started && !STATE.awaitingContinue && !document.hidden
     && !$('menu-modal').classList.contains('visible') && !$('about-modal').classList.contains('visible')
-    && !$('end-screen').classList.contains('visible');
+    && !$('end-screen').classList.contains('visible') && $('help-overlay').hidden;
 }
 
 // Advance this phase's clock (live ticks, or minutes burned by a false lead) and fire due events
@@ -877,6 +877,7 @@ function endGame() {
 document.addEventListener('keydown', (e) => {
   if (!STATE.started) return;
   if ($('menu-modal').classList.contains('visible') || $('about-modal').classList.contains('visible')) return;
+  if (!$('help-overlay').hidden) return; // the tour has its own keys
 
   const key = e.key.toUpperCase();
   // A-E and 1-5 select by display position (nth button on screen)
@@ -1013,6 +1014,184 @@ $('about-modal').addEventListener('keydown', (e) => {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 });
+
+// ── HELP TOUR ─────────────────────────────────────
+// Dims the game screen and lights up one area at a time, with a callout
+// pointing at it. Steps whose area isn't on screen right now are skipped. On
+// phones the tour switches to the panel it is describing. The clock is stopped
+// while the tour is open (clockRunning), and game keys are ignored.
+const HELP_STEPS = [
+  { el: () => $('header'), title: 'INCIDENT HEADER',
+    body: 'The ticket, its severity, and the time elapsed on the incident — the wall clock, which moves with the story as well as with your decisions. The phase on the right and the bar underneath show how far through the six phases you are.' },
+  { el: () => document.querySelector('.incident-meta'), panel: 'brief', title: 'INCIDENT BRIEF',
+    body: 'Who the client is, how severe this is, and when it was handed to you. The summary below it is what the SOC knew at handoff.' },
+  { el: () => document.querySelector('.ioc-list'), panel: 'brief', title: 'INDICATORS OF COMPROMISE',
+    body: 'What was known at handoff: hashes, IPs, domains, accounts. They are where the investigation starts, not the whole story — each phase\'s evidence turns up more.' },
+  { el: () => $('score-tracker'), panel: 'brief', title: 'PERFORMANCE METRICS',
+    body: 'Your running score in four dimensions: response time, containment, evidence preservation and thoroughness. Decisions, tagged findings, false leads, time over par and consequences of earlier choices all move them. Your grade is the total as a percentage of the best possible for this incident.' },
+  { el: () => document.querySelector('#action-body .carried-box'), panel: 'action', title: 'CARRIED FORWARD',
+    body: 'Consequences of your earlier decisions that caught up with you in this phase, with the points each one cost or earned.' },
+  { el: () => document.querySelector('#action-body .narrative-box'), panel: 'action', title: 'SITUATION BRIEFING',
+    body: 'What has happened and what this phase asks of you. It is written for the path you are on, so it changes with the choices you made earlier.' },
+  { el: () => document.querySelector('#action-body .evidence-box'), panel: 'action', title: 'EVIDENCE',
+    body: 'Logs and artefacts for this phase. Click a line, or use ↑ ↓ and Enter, to tag it as a finding. A real finding earns evidence points, can unlock a better response option, and strengthens your report; tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters.' },
+  { el: () => STATE.incident && STATE.incident.clock ? ($('start-clock-btn') || $('live-strip')) : null, panel: 'action', title: 'DECISION CLOCK',
+    body: () => STATE.clockMode === 'turn'
+      ? 'You are playing turn-based, so there is no clock: take as long as you like. Real-time mode, in the ↺ menu, has the attacker keep moving while you decide.'
+      : 'Reading is free: each phase opens with the clock stopped. Starting it shows your response options, and from then on the attacker keeps moving — this strip shows what is getting worse. Deciding over par costs response time. Turn-based mode, in the ↺ menu, has no clock.' },
+  { el: () => { const c = $('choices-container'); if (c && c.children.length) return c; const o = $('outcome-area'); return o && o.children.length ? o : null; },
+    panel: 'action', title: 'RESPONSE OPTIONS',
+    body: () => STATE.awaitingContinue
+      ? 'The outcome of your decision: what happened, and what it scored. Proceed when you are ready — the consequences may follow you into later phases.'
+      : 'Three options each phase, sometimes a fourth unlocked by a finding you tagged. Choose with A–D, 1–4, or a click. There is no undo.' },
+  { el: () => $('siem-feed-col'), panel: 'siem', title: 'SIEM FEED',
+    body: 'Events as they happen, stamped on the incident\'s clock: each phase\'s alerts, what the attacker does while your clock runs, and the result of every decision. Click the panel to widen it.' },
+  { el: () => $('notes-col'), panel: 'siem', title: 'ANALYST NOTES',
+    body: 'Your running log of findings, false leads and actions. Hover a note to remove it. That only tidies the log: a finding stays tagged and scored.' },
+  { el: () => $('menu-btn'), title: 'INCIDENT MENU',
+    body: 'Replay this incident, start another or choose a scenario, switch between real-time and turn-based, or delete all game data. The clock stops while it is open.' },
+  { el: () => $('help-btn'), title: 'HELP',
+    body: 'Open this tour whenever you like; the clock is stopped while it is open. ← and → step through it, Esc leaves.' },
+];
+let helpSteps = [], helpIdx = 0, helpReturnFocus = null, helpTab = null;
+
+function helpMobile() { return getComputedStyle($('mobile-tabs')).display !== 'none'; }
+function helpShowPanel(panel) {
+  if (!panel || !helpMobile()) return;
+  const btn = document.querySelector(`#mobile-tabs button[data-panel="${panel}"]`);
+  if (btn && !btn.classList.contains('active')) btn.click();
+}
+// The part of an element actually on screen: clipped by every scrolling or clipping ancestor
+function helpRect(el) {
+  const r = el.getBoundingClientRect();
+  let { top, left, right, bottom } = r;
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const cs = getComputedStyle(p);
+    if (!/(auto|scroll|hidden)/.test(cs.overflowX + cs.overflowY)) continue;
+    const pr = p.getBoundingClientRect();
+    top = Math.max(top, pr.top); bottom = Math.min(bottom, pr.bottom);
+    left = Math.max(left, pr.left); right = Math.min(right, pr.right);
+  }
+  const pad = 4;
+  top = Math.max(top, 0) - pad; left = Math.max(left, 0) - pad;
+  right = Math.min(right, innerWidth) + pad; bottom = Math.min(bottom, innerHeight) + pad;
+  return { top, left, right, bottom, width: right - left, height: bottom - top };
+}
+function setSpot(r) {
+  Object.assign($('help-spot').style, { top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
+}
+// Put the callout beside the target, never over it if any side has room (narrowing
+// it to fit beside a large area), with its arrow aimed at the target's centre
+const HELP_POP_W = 340, HELP_POP_MIN_W = 240;
+function placeHelpPop(r) {
+  const pop = $('help-pop'), arrow = $('help-arrow');
+  const vw = innerWidth, vh = innerHeight, gap = 14, m = 8;
+  const room = { right: vw - r.right - gap - m, left: r.left - gap - m, bottom: vh - r.bottom - gap - m, top: r.top - gap - m };
+  let side = null;
+  for (const s of ['right', 'left', 'bottom', 'top']) {
+    if (s === 'right' || s === 'left') {
+      const w = Math.min(HELP_POP_W, room[s]);
+      if (w < HELP_POP_MIN_W) continue;
+      pop.style.width = w + 'px';
+      if (pop.offsetHeight <= vh - 2 * m) { side = s; break; }
+    } else {
+      pop.style.width = '';
+      if (pop.offsetHeight <= room[s]) { side = s; break; }
+    }
+  }
+  if (!side) { // nothing fits cleanly: the side with the most room, overlapping
+    pop.style.width = '';
+    side = Object.keys(room).sort((a, b) => room[b] - room[a])[0];
+  }
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let top, left;
+  if (side === 'right' || side === 'left') {
+    left = side === 'right' ? r.right + gap : r.left - gap - pw;
+    top = clamp(cy - ph / 2, m, vh - ph - m);
+    arrow.style.top = clamp(cy - top - 6, 12, ph - 24) + 'px'; arrow.style.left = side === 'right' ? '-7px' : '';
+  } else {
+    top = side === 'bottom' ? r.bottom + gap : r.top - gap - ph;
+    left = clamp(cx - pw / 2, m, vw - pw - m);
+    arrow.style.left = clamp(cx - left - 6, 12, pw - 24) + 'px'; arrow.style.top = side === 'bottom' ? '-7px' : '';
+  }
+  pop.style.left = clamp(left, m, vw - pw - m) + 'px';
+  pop.style.top = clamp(top, m, vh - ph - m) + 'px';
+  pop.dataset.side = side;
+}
+function showHelpStep(i) {
+  helpIdx = i;
+  const step = helpSteps[i];
+  helpShowPanel(step.panel);
+  const el = step.el();
+  if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  $('help-count').textContent = `HELP · ${i + 1} OF ${helpSteps.length}`;
+  $('help-title').textContent = step.title;
+  $('help-body').textContent = resolve(step.body);
+  $('help-prev').disabled = i === 0;
+  $('help-next').textContent = i === helpSteps.length - 1 ? 'DONE' : 'NEXT ▸';
+  const r = helpRect(el);
+  setSpot(r);
+  placeHelpPop(r);
+}
+function openHelp() {
+  if (!STATE.started || !$('game-screen').classList.contains('visible') || $('end-screen').classList.contains('visible')) return;
+  // Only the steps whose area exists right now (no carried box, no options yet, ...)
+  helpSteps = HELP_STEPS.filter(s => s.el());
+  if (!helpSteps.length) return;
+  helpReturnFocus = document.activeElement;
+  helpTab = helpMobile() ? (document.querySelector('#mobile-tabs button.active') || {}).dataset?.panel : null;
+  $('main').classList.remove('siem-expanded');
+  const overlay = $('help-overlay'), spot = $('help-spot');
+  overlay.hidden = false;
+  // Dim first: the spotlight starts as a point at the first area's centre, then opens onto it
+  helpShowPanel(helpSteps[0].panel);
+  const r = helpRect(helpSteps[0].el());
+  spot.classList.add('instant');
+  setSpot({ top: r.top + r.height / 2, left: r.left + r.width / 2, width: 0, height: 0 });
+  $('help-pop').classList.add('hidden');
+  void spot.offsetWidth;
+  spot.classList.remove('instant');
+  overlay.classList.add('open');
+  setTimeout(() => {
+    if (overlay.hidden) return;
+    showHelpStep(0);
+    $('help-pop').classList.remove('hidden');
+    $('help-next').focus({ preventScroll: true });
+  }, 220);
+}
+function closeHelp() {
+  const overlay = $('help-overlay');
+  if (overlay.hidden) return;
+  overlay.classList.remove('open');
+  overlay.hidden = true;
+  if (helpTab) helpShowPanel(helpTab);
+  lastTick = performance.now(); // the tour's time is not decision time
+  if (helpReturnFocus && document.contains(helpReturnFocus)) helpReturnFocus.focus({ preventScroll: true });
+}
+function helpStep(delta) {
+  const i = helpIdx + delta;
+  if (i < 0) return;
+  if (i >= helpSteps.length) { closeHelp(); return; }
+  showHelpStep(i);
+}
+$('help-btn').addEventListener('click', (e) => { e.stopPropagation(); openHelp(); });
+$('help-prev').addEventListener('click', () => helpStep(-1));
+$('help-next').addEventListener('click', () => helpStep(1));
+$('help-exit').addEventListener('click', closeHelp);
+$('help-overlay').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeHelp(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); helpStep(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); helpStep(-1); }
+  else if (e.key === 'Tab') {
+    const f = [...$('help-pop').querySelectorAll('button')].filter(b => !b.disabled);
+    const i = f.indexOf(document.activeElement);
+    e.preventDefault();
+    f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+  }
+});
+window.addEventListener('resize', () => { if (!$('help-overlay').hidden) showHelpStep(helpIdx); });
 
 // ── MOBILE TAB SWITCHING ─────────────────────────
 document.querySelectorAll('#mobile-tabs button').forEach(btn => {

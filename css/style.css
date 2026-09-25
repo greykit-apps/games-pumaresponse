@@ -291,6 +291,83 @@ body::after {
   flex-shrink: 0;
 }
 #menu-btn:hover { background: var(--green); color: var(--bg); text-shadow: none; }
+#help-btn {
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--green-dim);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--green);
+  font-family: var(--font);
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+#help-btn:hover { background: var(--green); color: var(--bg); }
+
+/* ===================== HELP TOUR ===================== */
+/* The overlay only catches clicks; the dimming is the spotlight's own shadow,
+   so everything but the lit area is dark */
+#help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-overlay) + 10);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+#help-overlay[hidden] { display: none; }
+#help-overlay.open { opacity: 1; }
+#help-spot {
+  position: fixed;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--green), 0 0 18px var(--green-glow-lg), 0 0 0 200vmax rgba(0,0,0,0.8);
+  pointer-events: none;
+  transition: top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
+#help-spot.instant { transition: none; }
+#help-pop {
+  position: fixed;
+  width: min(340px, calc(100vw - 16px));
+  background: var(--bg);
+  border: 1px solid var(--green);
+  box-shadow: 0 0 20px var(--green-glow);
+  padding: 14px 16px 12px;
+  color: var(--green);
+  transition: top 0.3s ease, left 0.3s ease, opacity 0.2s ease;
+}
+#help-pop.hidden { opacity: 0; }
+#help-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--bg);
+  border: 1px solid transparent;
+  transform: rotate(45deg);
+}
+#help-pop[data-side="right"] #help-arrow { left: -7px; border-left-color: var(--green); border-bottom-color: var(--green); }
+#help-pop[data-side="left"] #help-arrow { right: -7px; border-top-color: var(--green); border-right-color: var(--green); }
+#help-pop[data-side="bottom"] #help-arrow { top: -7px; border-top-color: var(--green); border-left-color: var(--green); }
+#help-pop[data-side="top"] #help-arrow { bottom: -7px; border-bottom-color: var(--green); border-right-color: var(--green); }
+#help-count { font-size: 11px; color: var(--green-dim); letter-spacing: 1px; margin-bottom: 4px; }
+#help-title { font-size: 15px; letter-spacing: 2px; color: var(--green); text-shadow: 0 0 6px var(--green-glow-lg); margin-bottom: 8px; }
+#help-body { font-size: 13px; line-height: 1.55; color: var(--green); margin-bottom: 12px; }
+.help-nav { display: flex; gap: 6px; }
+.help-nav button {
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid var(--green-dim);
+  background: transparent;
+  color: var(--green);
+  font: 12px var(--font);
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.help-nav button:hover:not(:disabled) { background: var(--green); color: var(--bg); }
+.help-nav button:disabled { opacity: 0.35; cursor: default; }
+#help-exit { flex: 0 0 auto; border-color: var(--amber); color: var(--amber); }
+#help-exit:hover { background: var(--amber) !important; color: var(--bg) !important; }
 #menu-modal-inner { max-height: calc(100vh - 40px); overflow-y: auto; }
 .menu-warning {
   border: 1px dashed var(--red-dim);
