@@ -1049,7 +1049,7 @@ const HELP_STEPS = [
   { el: () => $('notes-col'), panel: 'siem', title: 'ANALYST NOTES',
     body: 'Your running log of findings, false leads and actions. Hover a note to remove it. That only tidies the log: a finding stays tagged and scored.' },
   { el: () => $('menu-btn'), title: 'INCIDENT MENU',
-    body: 'Replay this incident, start another or choose a scenario, switch between real-time and turn-based, or delete all game data. The clock stops while it is open.' },
+    body: 'Replay this incident, start another or choose a scenario, switch between real-time and turn-based, or reset your progress. The clock stops while it is open.' },
   { el: () => $('help-btn'), title: 'HELP',
     body: 'Open this tour whenever you like; the clock is stopped while it is open. ← and → step through it, Esc leaves.' },
 ];
@@ -1261,7 +1261,7 @@ let resetTimer = null;
 function disarmReset() {
   clearTimeout(resetTimer);
   $('menu-reset').classList.remove('armed');
-  $('menu-reset').textContent = 'DELETE ALL GAME DATA';
+  $('menu-reset').textContent = 'RESET PROGRESS';
   $('menu-reset-note').textContent = '';
 }
 function resetAllData() {
@@ -1277,13 +1277,13 @@ function resetAllData() {
   $('game-screen').classList.remove('visible');
   $('end-screen').classList.remove('visible');
   openMenu();
-  $('menu-warning').textContent = 'All game data deleted from this browser: personal bests and settings.';
+  $('menu-warning').textContent = 'Progress reset: personal bests and settings deleted from this browser.';
 }
 $('menu-reset').addEventListener('click', () => {
   const btn = $('menu-reset');
   if (!btn.classList.contains('armed')) {
     btn.classList.add('armed');
-    btn.textContent = 'PRESS AGAIN TO DELETE';
+    btn.textContent = 'PRESS AGAIN TO RESET';
     $('menu-reset-note').textContent = 'This deletes your personal bests and clock setting, and abandons any incident in progress. It can\'t be undone.';
     clearTimeout(resetTimer);
     resetTimer = setTimeout(disarmReset, 6000);
