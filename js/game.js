@@ -212,13 +212,35 @@ function addNote(phase, text) {
 function renderNotes() {
   const body = $('notes-col');
   body.innerHTML = '<div class="section-title" style="margin-top:0;">ANALYST NOTES</div>';
-  STATE.notes.forEach(n => {
+  STATE.notes.forEach((n, i) => {
     const div = document.createElement('div');
     div.className = 'note-entry';
-    div.innerHTML = `<span class="note-phase">[${escapeHtml(n.phase)}]</span> ${escapeHtml(n.text)}`;
+    div.innerHTML = `<span class="note-phase">[${escapeHtml(n.phase)}]</span> ${escapeHtml(n.text)}`
+      + `<button type="button" class="note-remove" data-i="${i}" aria-label="Remove note: ${escapeHtml(n.text)}">REMOVE</button>`;
     body.appendChild(div);
   });
 }
+
+// Removing a note only tidies the notebook: a finding stays tagged and scored.
+function removeNote(i) {
+  STATE.notes.splice(i, 1);
+  renderNotes();
+  // Keep keyboard focus in the list: the note that moved up, else the one above
+  const btns = document.querySelectorAll('.note-remove');
+  const next = btns[Math.min(i, btns.length - 1)];
+  if (next) next.focus({ preventScroll: true });
+}
+$('notes-col').addEventListener('click', (e) => {
+  const btn = e.target.closest('.note-remove');
+  if (!btn) return;
+  e.stopPropagation(); // the right panel toggles its expanded view on any click
+  removeNote(+btn.dataset.i);
+});
+// Enter/Space on the button is its own click; don't let the global keys
+// (start clock, advance phase) act on it too
+$('notes-col').addEventListener('keydown', (e) => {
+  if (e.target.closest('.note-remove') && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
+});
 
 // ── RENDER INCIDENT BRIEF ──────────────────────────
 // Offer natural break points inside long indicators: before "@" in addresses and

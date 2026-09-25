@@ -802,6 +802,33 @@ body::after {
   line-height: 1.4;
 }
 .note-entry .note-phase { color: var(--amber); font-size: 11px; }
+.note-entry { position: relative; }
+/* Revealed on hover or keyboard focus; drawn over the end of the line so
+   nothing reflows when it appears */
+.note-remove {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  padding: 1px 5px 1px 14px;
+  font: 10px var(--font);
+  letter-spacing: 0.5px;
+  color: var(--red);
+  background: linear-gradient(to right, transparent, var(--bg) 10px);
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+.note-entry:hover .note-remove,
+.note-remove:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.note-remove:hover { text-decoration: underline; text-shadow: 0 0 4px var(--red); }
+/* No hover on touch screens: keep it visible */
+@media (hover: none) {
+  .note-remove { opacity: 1; pointer-events: auto; }
+}
 
 /* ===================== RIGHT PANEL: SIEM & NOTES ===================== */
 #right-panel { border-right: none; border-left: 1px solid var(--border); }
