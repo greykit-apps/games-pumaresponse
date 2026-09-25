@@ -1022,6 +1022,9 @@ $('about-modal').addEventListener('keydown', (e) => {
 // while the tour is open (clockRunning), and game keys are ignored.
 // Each step: the area to light, a title, an optional key line (highlighted), and the body
 const HELP_STEPS = [
+  { el: () => document.querySelector('#action-body .evidence-box'), panel: 'action', title: 'EVIDENCE',
+    key: 'Click the lines that matter. A finding can unlock a fourth response option — often the strongest move in the phase, and there is no other way to get it.',
+    body: 'Click a line, or use ↑ ↓ and Enter, to tag it as a finding. Findings also earn evidence points and strengthen your report, and some change what happens later. Tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters. You can tag before or after starting the clock.' },
   { el: () => document.querySelector('.ioc-list'), panel: 'brief', title: 'INDICATORS OF COMPROMISE',
     body: 'What was known at handoff: hashes, IPs, domains, accounts. They are where the investigation starts, not the whole story — each phase\'s evidence turns up more.' },
   { el: () => $('score-tracker'), panel: 'brief', title: 'PERFORMANCE METRICS',
@@ -1030,9 +1033,6 @@ const HELP_STEPS = [
     body: 'Consequences of your earlier decisions that caught up with you in this phase, with the points each one cost or earned.' },
   { el: () => document.querySelector('#action-body .narrative-box'), panel: 'action', title: 'SITUATION BRIEFING',
     body: 'What has happened and what this phase asks of you. It is written for the path you are on, so it changes with the choices you made earlier.' },
-  { el: () => document.querySelector('#action-body .evidence-box'), panel: 'action', title: 'EVIDENCE',
-    key: 'Click the lines that matter. A finding can unlock a fourth response option — often the strongest move in the phase, and there is no other way to get it.',
-    body: 'Click a line, or use ↑ ↓ and Enter, to tag it as a finding. Findings also earn evidence points and strengthen your report, and some change what happens later. Tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters. You can tag before or after starting the clock.' },
   { el: () => STATE.incident && STATE.incident.clock ? ($('start-clock-btn') || $('live-strip')) : null, panel: 'action', title: 'DECISION CLOCK',
     body: () => STATE.clockMode === 'turn'
       ? 'You are playing turn-based, so there is no clock: take as long as you like. Real-time mode, in the ↺ menu, has the attacker keep moving while you decide.'
@@ -1094,9 +1094,13 @@ function placeHelpPop(r) {
       if (pop.offsetHeight <= room[s]) { side = s; break; }
     }
   }
-  if (!side) { // nothing fits cleanly: the side with the most room, overlapping
+  if (!side) {
+    // A tall area on a small screen: light its top part and put the callout below,
+    // rather than covering it. Only when that leaves a useful strip lit.
     pop.style.width = '';
-    side = Object.keys(room).sort((a, b) => room[b] - room[a])[0];
+    const need = pop.offsetHeight + gap + m;
+    if (vh - need - r.top >= 100) { r = { ...r, bottom: vh - need, height: vh - need - r.top }; side = 'bottom'; }
+    else side = Object.keys(room).sort((a, b) => room[b] - room[a])[0]; // last resort: overlap
   }
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -1114,22 +1118,22 @@ function placeHelpPop(r) {
   pop.style.left = clamp(left, m, vw - pw - m) + 'px';
   pop.style.top = clamp(top, m, vh - ph - m) + 'px';
   pop.dataset.side = side;
+  return r; // the area to light, trimmed if the callout needed the room
 }
 function showHelpStep(i) {
   helpIdx = i;
   const step = helpSteps[i];
   helpShowPanel(step.panel);
   const el = step.el();
-  if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  // A tall area goes to the top of its panel, so its beginning is what gets lit
+  if (el) el.scrollIntoView({ block: el.offsetHeight > innerHeight / 2 ? 'start' : 'nearest', inline: 'nearest' });
   $('help-count').textContent = `HELP · ${i + 1} OF ${helpSteps.length}`;
   $('help-title').textContent = step.title;
   $('help-key').textContent = step.key || '';
   $('help-body').textContent = resolve(step.body);
   $('help-prev').disabled = i === 0;
   $('help-next').textContent = i === helpSteps.length - 1 ? 'DONE' : 'NEXT ▸';
-  const r = helpRect(el);
-  setSpot(r);
-  placeHelpPop(r);
+  setSpot(placeHelpPop(helpRect(el)));
 }
 function openHelp() {
   if (!STATE.started || !$('game-screen').classList.contains('visible') || $('end-screen').classList.contains('visible')) return;
