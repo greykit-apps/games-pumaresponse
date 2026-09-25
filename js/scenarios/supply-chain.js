@@ -14,6 +14,18 @@ function scStage(t) {
 function scN(n) {
   return Math.round(n).toLocaleString('en-US');
 }
+// Wall-clock stamp m minutes after the 09:15 handoff (Mar 15); the date is
+// included when asked for, or whenever the stamp has rolled past midnight
+function scStamp(m, withDate) {
+  const t = 9 * 60 + 15 + Math.floor(m);
+  const day = Math.floor(t / 1440);
+  const hhmm = `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  return day || withDate ? `Mar ${15 + day} ${hhmm}` : hhmm;
+}
+// How long the EMR has been down at the start of Recovery, in minutes
+function scEmrDown(f) {
+  return f.ransomware ? 240 : f.emrHardDown ? 540 : 360;
+}
 // Would an update signed with NetPulse's stolen key install on Vertex endpoints?
 function scFakeUpdateLands(f) {
   return !f.agentUninstalled && f.updateTrusted && !f.hashPinned && !f.certRevoked;
@@ -45,7 +57,7 @@ registerIncident(
     // In-world "today": every date in this file is written relative to it and
     // shown shifted to the real date (see REAL-DATE ANCHORING in js/game.js)
     baseDate: '2024-03-15',
-    assignedTime: '09:15 UTC',
+    assignedTime: '09:15 ET',
     summary: 'Trusted IT monitoring agent (NetPulse RMM) pushed backdoored update to 340+ endpoints. Beacon traffic detected to unknown C2. Patient data systems potentially accessed.',
     iocs: [
       { type: 'FILE HASH', val: 'e4f7a1b2c3d5...9f0e (SHA256) — trojanized NetPulse update' },
@@ -82,6 +94,8 @@ registerIncident(
       cisaShared: false,       // CISA / HHS HC3 / Health-ISAC got the IOC package
       notifyPrepped: false,    // HIPAA notification work started in recovery
       notifyStatus: '',        // how the HIPAA notification actually went out
+      triagedAt: 0,            // wall-clock minute (since handoff) the Triage action landed
+      containedAt: 0,          // wall-clock minute the Containment action landed
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
@@ -156,7 +170,7 @@ registerIncident(
             score: { time: 15, containment: 20, evidence: 10, thoroughness: 10 },
             sets: (f, st) => {
               const s = scStage(st.phaseClock);
-              return { c2Blocked: true, hostsStaged: s.hosts, recordsExposed: s.records };
+              return { triagedAt: st.elapsed, c2Blocked: true, hostsStaged: s.hosts, recordsExposed: s.records };
             },
             outcome: (f, st) => {
               const s = scStage(st.phaseClock);
@@ -173,7 +187,7 @@ registerIncident(
             score: { time: 5, containment: 15, evidence: -10, thoroughness: 0 },
             sets: (f, st) => {
               const s = scStage(st.phaseClock);
-              return { agentUninstalled: true, evidenceLost: true, updateTrusted: false, hostsStaged: s.hosts, recordsExposed: s.records };
+              return { triagedAt: st.elapsed, agentUninstalled: true, evidenceLost: true, updateTrusted: false, hostsStaged: s.hosts, recordsExposed: s.records };
             },
             outcome: (f, st) => 'NetPulse fully removed from all endpoints, which stops the beacon. However, you\'ve also removed the legitimate RMM agent — Vertex IT now has no remote management capability for 342 endpoints during an active incident. Forensic artifacts within the NetPulse install directory are lost on hosts where the uninstaller ran cleanup.'
               + ` And the uninstaller only knows about NetPulse: the Cobalt Strike beacon npext.dll already dropped on ${scStage(st.phaseClock).hosts} hosts is not part of the package, and nothing is blocking it from reaching 203.0.113.88.`,
@@ -187,11 +201,11 @@ registerIncident(
             // Three hours on hold before anyone acts
             sets: (f, st) => {
               const s = scStage(st.phaseClock + 180);
-              return { attackerTipped: true, evidenceLost: true, hostsStaged: s.hosts, recordsExposed: s.records };
+              return { triagedAt: st.elapsed, attackerTipped: true, evidenceLost: true, hostsStaged: s.hosts, recordsExposed: s.records };
             },
             outcome: (f, st) => {
               const s = scStage(st.phaseClock + 180);
-              return 'NetPulse support is slow to respond — it\'s a weekend. When the on-call engineer does answer, he checks the release manifest: v4.2.2 is an official, signed build, so as far as he can tell it\'s legitimate. It came out of their own pipeline. '
+              return 'NetPulse support is slow to respond — it\'s not yet 06:30 at their Seattle desk and the on-call engineer is the only one answering. When he does, he checks the release manifest: v4.2.2 is an official, signed build, so as far as he can tell it\'s legitimate. It came out of their own pipeline. '
                 + `Three hours later NetPulse security calls back: the build server was compromised and the update was never authorized. By then the stager has put Cobalt Strike on ${s.hosts} hosts, and the attacker has escalated on DB-PROD-01 and queried patient data for ${scN(s.records)} patients across the EMR, billing and clinic systems. `
                 + 'Worse: your ticket, quoting the C2 IP, went into a support system the attacker had been reading from inside NetPulse. They know you\'re coming.';
             },
@@ -205,7 +219,7 @@ registerIncident(
             score: { time: 15, containment: 25, evidence: 10, thoroughness: 15 },
             sets: (f, st) => {
               const s = scStage(st.phaseClock);
-              return { c2Blocked: true, hashPinned: true, hostsStaged: s.hosts, recordsExposed: s.records };
+              return { triagedAt: st.elapsed, c2Blocked: true, hashPinned: true, hostsStaged: s.hosts, recordsExposed: s.records };
             },
             outcome: (f, st) => {
               const s = scStage(st.phaseClock);
@@ -235,10 +249,12 @@ registerIncident(
       },
       { // CONTAINMENT
         name: 'CONTAINMENT',
+        // Asking the vendor cost three hours on hold before anyone acted
+        at: f => f.attackerTipped ? f.triagedAt + 180 : 0,
         carried: f => {
           const out = [];
           if (f.attackerTipped) out.push({
-            text: '10:52 — forty minutes after your ticket landed in NetPulse\'s queue, npext.dll scheduled its own deletion on 29 hosts and cleared their Security and System event logs.',
+            text: `${scStamp(f.triagedAt + 40)} — forty minutes after your ticket landed in NetPulse's queue, npext.dll scheduled its own deletion on 29 hosts and cleared their Security and System event logs.`,
             score: { evidence: -10, containment: -5 },
           });
           if (f.agentUninstalled) out.push({
@@ -264,28 +280,28 @@ registerIncident(
             : f.agentUninstalled ? 'NetPulse is gone from every endpoint and the npext.dll beacon has stopped — but what it installed has not.'
             : 'Initial triage is done and the HTTPS C2 channel is cut.',
           'The malicious update hit 342 endpoints but only 47 are actively beaconing — the backdoor appears to activate selectively based on hostname patterns matching servers and privileged workstations.',
-          `The attacker has already moved laterally to the EMR database server and a domain controller${f.hostsStaged > 3 ? `, and second-stage tooling now sits on ${f.hostsStaged} hosts` : ''}.`,
+          `The backdoor activated on the EMR database server itself, and from there the attacker has moved laterally to a domain controller${f.hostsStaged > 3 ? `; second-stage tooling now sits on ${f.hostsStaged} hosts` : ''}.`,
         ].join(' '),
         evidence: {
           title: 'LATERAL MOVEMENT — EDR + AD LOGS',
           content: f => `<span class="log-ok">[05:30:00]</span> DB-PROD-01: SQL Agent — nightly index maintenance completed
 <span class="log-warn">[05:44:00]</span> npext.dll activation check: hostname matches *PROD* or *DC*
 <span class="log-warn">[05:45:12]</span> Credential harvest: npext.dll → LSASS on DB-PROD-01<!--f:credTheft-->
-<span class="log-warn">[05:47:00]</span> <span class="log-highlight">Pass-the-hash</span>: svc_netpulse → DC-01 (local admin)<!--f:credTheft-->
+<span class="log-warn">[05:47:00]</span> <span class="log-highlight">Pass-the-hash</span>: svc_netpulse → DC-01 (member of Domain Admins)<!--f:credTheft-->
 <span class="log-warn">[05:50:33]</span> DC-01: Recon — nltest /dclist, net group "domain admins"<!--f:credTheft-->
 <span class="log-ok">[06:00:00]</span> DC-01: Group Policy refresh (scheduled)
 <span class="log-warn">[06:02:00]</span> <span class="log-highlight">ALERT</span> New service created on DC-01: "HealthCheck"<!--f:healthCheck-->
 <span class="log-warn">[06:02:15]</span> HealthCheck → C:\\Windows\\Temp\\hc.exe (Cobalt Strike)<!--f:healthCheck-->
 <span class="log-warn">[06:02:40]</span> hc.exe config: https 203.0.113.88 · fallback dns cdn-healthmetrics[.]net<!--f:dnsFallback-->
-<span class="log-warn">[06:15:00]</span> DB-PROD-01: SQL query — SELECT * FROM patients LIMIT 1000<!--f:patientsQuery-->
+<span class="log-warn">[06:15:00]</span> DB-PROD-01: SQL query — SELECT TOP 1000 * FROM patients<!--f:patientsQuery-->
 <span class="log-ok">[07:00:12]</span> DB-PROD-01: EMR app pool recycled (nightly)
 <span class="log-ok">[07:45:00]</span> VPN: 12 clinicians connected (on-call)
 <span class="log-warn">[08:30:00]</span> Outbound transfer: 203.0.113.88 — 450 MB<!--f:exfil-->
 <span class="log-ok">[08:45:00]</span> DC-01: System State backup — OK${f.agentUninstalled ? `
-<span class="log-ok">[09:40:00]</span> NetPulse uninstaller: C:\\Program Files\\NetPulse\\ removed — 342 hosts
-<span class="log-warn">[09:52:10]</span> DC-01: hc.exe → 203.0.113.88 — beacon still active<!--f:healthCheck-->` : ''}${f.attackerTipped ? `
-<span class="log-warn">[10:52:07]</span> npext.dll: self-delete scheduled (MoveFileEx) — 29 hosts<!--f:antiForensics-->
-<span class="log-warn">[10:52:30]</span> wevtutil cl Security / wevtutil cl System — same 29 hosts<!--f:antiForensics-->` : ''}`
+<span class="log-ok">[${scStamp(f.triagedAt + 5)}:00]</span> NetPulse uninstaller: C:\\Program Files\\NetPulse\\ removed — 342 hosts
+<span class="log-warn">[${scStamp(f.triagedAt + 12)}:10]</span> DC-01: hc.exe → 203.0.113.88 — beacon still active<!--f:healthCheck-->` : ''}${f.attackerTipped ? `
+<span class="log-warn">[${scStamp(f.triagedAt + 40)}:07]</span> npext.dll: self-delete scheduled (MoveFileEx) — 29 hosts<!--f:antiForensics-->
+<span class="log-warn">[${scStamp(f.triagedAt + 40)}:30]</span> wevtutil cl Security / wevtutil cl System — same 29 hosts<!--f:antiForensics-->` : ''}`
         },
         choices: [
           {
@@ -294,7 +310,7 @@ registerIncident(
             desc: 'Targeted containment: isolate the two highest-value compromised hosts, kill the compromised service account, block staging server, and capture RAM dumps before isolation.',
             quality: 'good',
             score: { time: 10, containment: 25, evidence: 15, thoroughness: 10 },
-            sets: { memoryCaptured: true, c2Blocked: true, dcContained: true },
+            sets: (f, st) => ({ containedAt: st.elapsed, memoryCaptured: true, c2Blocked: true, dcContained: true }),
             outcome: f => 'Memory dumps captured from both hosts before network isolation — preserving volatile evidence of the Cobalt Strike beacon and credential theft. svc_netpulse disabled across the domain. Secondary C2 blocked'
               + (f.c2Blocked ? '.' : ', and the primary 198.51.100.47 with it — nobody had blocked either yet.')
               + ' Lateral movement path severed. The backup DC takes over authentication seamlessly.'
@@ -309,7 +325,7 @@ registerIncident(
             quality: 'partial',
             score: { time: 5, containment: 10, evidence: 5, thoroughness: 5 },
             // DC-01 stays up and in the attacker's hands until eradication
-            sets: f => ({ c2Blocked: true, krbtgtStolen: true, lateral: 3, hostsStaged: f.hostsStaged + (f.lateral ? 0 : 3) }),
+            sets: (f, st) => ({ containedAt: st.elapsed, c2Blocked: true, krbtgtStolen: true, lateral: 3, hostsStaged: f.hostsStaged + (f.lateral ? 0 : 3) }),
             outcome: 'HTTPS C2 and the exfil path to 203.0.113.88 are blocked. But DC-01 is also Vertex\'s DNS server, and outbound DNS forwarding is on the allowlist — hc.exe\'s DNS fallback keeps working. The attacker still has local access to DC-01 and DB-PROD-01. They can\'t move bulk data out, but they can still move laterally within the network, access data, and deploy additional persistence: before eradication they replicate the domain\'s hashes from DC-01 and push Cobalt Strike to three more servers. The compromised service account remains active.',
           },
           {
@@ -318,7 +334,7 @@ registerIncident(
             desc: 'Emergency shutdown of all healthcare database systems.',
             quality: 'bad',
             score: { time: -10, containment: 10, evidence: -15, thoroughness: -10 },
-            sets: f => ({ emrHardDown: true, krbtgtStolen: true, lateral: 3, hostsStaged: f.hostsStaged + (f.lateral ? 0 : 3) }),
+            sets: (f, st) => ({ containedAt: st.elapsed, emrHardDown: true, krbtgtStolen: true, lateral: 3, hostsStaged: f.hostsStaged + (f.lateral ? 0 : 3) }),
             outcome: 'The EMR shutdown disrupts patient care across 3 hospital facilities. Emergency departments revert to paper records. Two scheduled surgeries are delayed. Volatile memory evidence on DB-PROD-01 is lost. The attacker still has access to DC-01 and other beaconing hosts — and uses it to replicate the domain\'s hashes and spread to three more servers. Nor does the shutdown buy any time: the 60-day HIPAA notification clock was already running from the moment DB-PROD-01\'s patient table was confirmed accessed.',
           },
           {
@@ -328,7 +344,7 @@ registerIncident(
             desc: 'Memory, isolation, svc_netpulse, secondary C2 — plus an internal DNS sinkhole for the fallback domain, so every implant that tries it gives itself away.',
             quality: 'good',
             score: { time: 10, containment: 30, evidence: 15, thoroughness: 15 },
-            sets: { memoryCaptured: true, c2Blocked: true, dcContained: true, lateralFound: true },
+            sets: (f, st) => ({ containedAt: st.elapsed, memoryCaptured: true, c2Blocked: true, dcContained: true, lateralFound: true }),
             outcome: f => 'Memory captured from DC-01 and DB-PROD-01, both isolated, svc_netpulse disabled, 203.0.113.88 blocked'
               + (f.c2Blocked ? '' : ' along with 198.51.100.47')
               + '. The fallback domain now resolves to your sinkhole, and every resolver query is logged. '
@@ -345,12 +361,17 @@ registerIncident(
           { at: 16, sev: 'crit', text: 'DC-01 → FS-02, HR-APP-01, PAY-01: Cobalt Strike installed over SMB',
             sets: f => ({ lateral: 3, hostsStaged: f.hostsStaged + (f.lateral ? 0 : 3) }), score: { containment: -3 } },
         ],
-        siemEntries: f => [
+        siemEntries: f => f.attackerTipped ? [
+          { time: '12:15', sev: 'crit', text: 'NetPulse security: build server compromised — v4.2.2 was never authorized' },
+          { time: '12:16', sev: 'crit', text: `Event logs cleared on 29 hosts at ${scStamp(f.triagedAt + 40)} — npext.dll self-deleted` },
+          { time: '12:20', sev: 'crit', text: 'Lateral movement confirmed: DB-PROD-01 and DC-01 compromised' },
+          { time: '12:21', sev: 'warn', text: 'Cobalt Strike beacon on DC-01 — HealthCheck service' },
+          { time: '12:22', sev: 'crit', text: '450 MB data exfiltrated to staging server before containment' },
+        ] : [
           { time: '09:30', sev: 'crit', text: 'Lateral movement confirmed: DB-PROD-01 and DC-01 compromised' },
           { time: '09:31', sev: 'warn', text: 'Cobalt Strike beacon on DC-01 — HealthCheck service' },
           { time: '09:32', sev: 'crit', text: '450 MB data exfiltrated to staging server before containment' },
-          ...(f.attackerTipped ? [{ time: '10:52', sev: 'crit', text: 'Event logs cleared on 29 hosts — npext.dll self-deleting' }] : []),
-          ...(f.agentUninstalled ? [{ time: '09:52', sev: 'warn', text: 'NetPulse removed — RMM unavailable on 342 endpoints' }] : []),
+          ...(f.agentUninstalled ? [{ time: '09:33', sev: 'warn', text: 'NetPulse removed — RMM unavailable on 342 endpoints' }] : []),
         ],
       },
       { // INVESTIGATION
@@ -390,7 +411,7 @@ registerIncident(
   Endpoints updated: 342
   Beacon activated: 47 (hostname filter: *PROD*, *DC*, *EXEC*)
   Second stage (Cobalt Strike): ${f.hostsStaged} hosts
-  Lateral movement: DB-PROD-01, DC-01, EXEC-WS-04 (CISO laptop)${f.lateral ? `
+  Hands-on-keyboard: DB-PROD-01, DC-01 (via pass-the-hash), EXEC-WS-04 (CISO laptop)${f.lateral ? `
   FS-02, HR-APP-01, PAY-01: service "WinTelemetry" → hc.exe variant, new hash<!--f:lateralCS-->` : ''}
   Data accessed: patients table, HR database, board docs
 
@@ -398,7 +419,7 @@ registerIncident(
   DB-PROD-01 dbo.patients: 180,000 distinct MRNs returned to db_admin<!--f:sqlAudit-->${f.recordsExposed >= 218000 ? `
   BILL-PROD-02 claims_archive: 38,000 former-patient MRNs returned<!--f:sqlAudit-->` : ''}${f.recordsExposed >= 251000 ? `
   OUTPT-DB-01 clinic_visits: 33,000 MRNs not held in the EMR<!--f:sqlAudit-->` : ''}${f.attackerTipped ? `
-  <span class="log-highlight">SQL Server Audit on DB-PROD-01 STOPPED 10:55 by db_admin</span><!--f:auditGap-->` : ''}
+  <span class="log-highlight">SQL Server Audit on DB-PROD-01 STOPPED ${scStamp(f.triagedAt + 43)} by db_admin</span><!--f:auditGap-->` : ''}
   DB-PROD-01 reporting_ro: 2,210 routine report queries (clinical staff)
 
 <span class="log-ok">── EXFILTRATION ASSESSMENT ──</span>
@@ -428,7 +449,7 @@ registerIncident(
               + (f.evidenceLost ? 'EXEC-WS-04 was asleep when the ' + (f.attackerTipped ? 'self-delete ran' : 'uninstaller ran') + ' — its disk still holds npext.dll, the one sample you recover. ' : '')
               + (f.memoryCaptured ? '' : 'With no memory captured before isolation, the in-memory Cobalt Strike config is gone; you rebuild it from EDR telemetry, slower and with gaps. ')
               + (f.attackerTipped
-                ? `The SQL audit trail stops at 10:55, when db_admin switched it off. Up to then it is record-level; after it, nothing can be ruled out, so counsel scopes notification to every patient in the systems touched — ${scN(f.recordsExposed)}. `
+                ? `The SQL audit trail stops at ${scStamp(f.triagedAt + 43)}, when db_admin switched it off. Up to then it is record-level; after it, nothing can be ruled out, so counsel scopes notification to every patient in the systems touched — ${scN(f.recordsExposed)}. `
                 : `Complete SQL query audit reveals exactly which patient records were accessed and exfiltrated — ${scN(f.recordsExposed)} patients. `)
               + 'NetPulse confirms upstream compromise and begins notifying other customers. Your findings help NetPulse identify the build server intrusion vector. '
               + (f.saw_keyTheft ? 'Because you showed them the .pfx was read, not just used, NetPulse asks its CA to revoke the certificate — anything that key signs from here on fails validation. '
@@ -442,7 +463,7 @@ registerIncident(
             quality: 'partial',
             score: { time: 10, containment: 5, evidence: 10, thoroughness: 0 },
             sets: f => ({ lateralFound: true, scopedRecords: f.recordsExposed, scopePrecise: !f.attackerTipped }),
-            outcome: f => `Vertex impact documented: 47 active compromises, ${3 + f.lateral} systems with lateral movement, confirmed patient data exfiltration covering ${scN(f.recordsExposed)} patients. `
+            outcome: f => `Vertex impact documented: 47 active compromises, ${3 + f.lateral} systems with hands-on-keyboard activity, confirmed patient data exfiltration covering ${scN(f.recordsExposed)} patients. `
               + 'But without coordinating with NetPulse, you don\'t know if the attacker has other persistence through the vendor relationship — or whether the signing key itself is still in their hands. NetPulse doesn\'t learn about the compromise for another 3 days, during which other healthcare customers are breached.',
           },
           {
@@ -483,7 +504,7 @@ registerIncident(
             }),
             outcome: f => 'Forensic images from DC-01, DB-PROD-01, EXEC-WS-04' + (f.lateral ? ', FS-02, HR-APP-01 and PAY-01' : '') + '. '
               + (f.attackerTipped
-                ? `SQL audit is record-level up to 10:55, when db_admin stopped it; counsel scopes to every patient in the touched systems — ${scN(f.recordsExposed)}. `
+                ? `SQL audit is record-level up to ${scStamp(f.triagedAt + 43)}, when db_admin stopped it; counsel scopes to every patient in the touched systems — ${scN(f.recordsExposed)}. `
                 : `SQL audit pins the exposure to ${scN(f.recordsExposed)} named patients. `)
               + 'NetPulse joins a bridge with CISA and HHS HC3 the same afternoon. '
               + (f.saw_c2ip && f.saw_staging
@@ -535,7 +556,7 @@ registerIncident(
   [5] hc.exe variant, service "WinTelemetry" — FS-02, HR-APP-01, PAY-01` : ''}
 
 <span class="log-highlight">COMPROMISED CREDENTIALS:</span>
-  - svc_netpulse (service account — local admin on all endpoints)
+  - svc_netpulse (NetPulse's service account — local admin on every endpoint and a member of Domain Admins, so the RMM could reach the DCs)
   - db_admin (SQL SA equivalent on EMR database)
   - ${f.krbtgtStolen ? 'KRBTGT — DCSync CONFIRMED (hash held by attacker)' : 'KRBTGT exposure likely (DC-01 compromised)'}
 
@@ -543,7 +564,7 @@ registerIncident(
 ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no update channel' : `  - NetPulse update channel still configured on all endpoints
   - ${f.hashPinned ? 'App control: NetPulse pinned to v4.2.1 by hash; auto-update frozen' : 'App control: any binary signed "NetPulse Software, Inc." allowed'}`}
   - NetPulse code-signing cert: ${f.certRevoked ? '<span class="log-ok">REVOKED by issuing CA</span>' : 'still trusted'}
-  - NetPulse service account has local admin on every host`
+  - NetPulse service account: local admin everywhere, Domain Admins for the DCs`
         },
         choices: [
           {
@@ -607,6 +628,8 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
       },
       { // RECOVERY
         name: 'RECOVERY',
+        // Waiting on the vendor: recovery starts after the day-4 detonation (06:00, day 4)
+        at: f => f.ransomware ? 4 * 1440 + 6 * 60 - (9 * 60 + 15) : 0,
         carried: f => {
           const out = [];
           if (f.ransomware) out.push({
@@ -619,7 +642,7 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
           });
           else if (!f.agentUninstalled && f.updateTrusted) out.push({
             sev: 'good',
-            text: `Overnight, update-netpulse[.]com offered a "v4.2.3" signed with the stolen key. ${f.hashPinned ? 'App control refused it — the hash wasn\'t on the pin list.' : 'Windows rejected it — the CA had revoked the certificate.'} 342 blocked installs, zero infections.`,
+            text: `Within the hour, update-netpulse[.]com offered a "v4.2.3" signed with the stolen key. ${f.hashPinned ? 'App control refused it — the hash wasn\'t on the pin list.' : 'Windows rejected it — the CA had revoked the certificate.'} 342 blocked installs, zero infections.`,
             score: { containment: 5 },
           });
           if (f.lateral && !f.lateralFound) out.push({
@@ -650,7 +673,7 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
   - <span class="log-highlight">64 servers encrypted (day 4) — rebuild queue</span>` : ''}
 
 <span class="log-warn">BUSINESS IMPACT:</span>
-  - EMR downtime: ongoing (~${f.emrHardDown ? '9 hours since the 09:40 hard shutdown' : '6 hours so far'})
+  - EMR downtime: ongoing (~${f.ransomware ? '4 hours since the day-4 detonation' : f.emrHardDown ? '9 hours since the hard shutdown' : '6 hours so far'})
   - 3 hospital facilities on paper records
   - ${f.emrHardDown ? 'Two surgeries delayed; surgical schedule disrupted' : 'Surgical schedule disrupted'}
   - Staff unable to access digital patient histories
@@ -715,7 +738,7 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
           },
         ],
         live: (f, st) => {
-          const m = (f.emrHardDown ? 540 : 360) + Math.floor(st.phaseClock);
+          const m = scEmrDown(f) + Math.floor(st.phaseClock);
           return `EMR DOWN ${Math.floor(m / 60)} H ${m % 60} MIN · 3 HOSPITALS ON PAPER`;
         },
         timeline: [
@@ -724,12 +747,14 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
         ],
         siemEntries: f => [
           { time: '15:00', sev: 'info', text: 'Recovery phase — EMR restoration planning' },
-          { time: '15:10', sev: 'warn', text: `EMR downtime: ${f.emrHardDown ? 9 : 6} hours — clinical impact escalating` },
+          { time: '15:10', sev: 'warn', text: `EMR downtime: ${scEmrDown(f) / 60} hours — clinical impact escalating` },
           { time: '15:15', sev: 'info', text: 'HIPAA 60-day notification clock running since discovery' },
         ],
       },
       { // POST-INCIDENT
         name: 'POST-INCIDENT',
+        // After the day-4 ransomware the review waits for the rebuild (Mar 21 17:30)
+        at: f => f.ransomware ? 6 * 1440 + 17 * 60 + 30 - (9 * 60 + 15) : 0,
         carried: f => scFoothold(f) ? [{
           text: 'You are writing the report while the attacker still has a way into Vertex.',
           score: { thoroughness: -10 },
@@ -740,15 +765,15 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
           + 'This was a sophisticated supply chain attack with significant regulatory implications. Your post-incident work will shape Vertex\'s security posture and their vendor risk management program going forward.',
         evidence: {
           title: 'INCIDENT SUMMARY',
-          content: f => `<span class="log-ok">TIMELINE:</span>
+          content: (f, st) => `<span class="log-ok">TIMELINE:</span>
   Vendor compromise:  Mar 4 or earlier (NetPulse build server)
   Malicious update:   Mar 15 03:12 (auto-update pushed)
   Beacon activation:  Mar 15 05:44 (47 hosts)
   Lateral movement:   Mar 15 05:45–06:15
   Data exfiltration:  Mar 15 06:15–08:30 (450 MB patient data)
   Detection:          Mar 15 09:01 (TI feed match)
-  Containment:        Mar 15 ~${f.attackerTipped ? '12:40' : f.agentUninstalled ? '09:40' : '09:30'}
-  Recovery complete:  ${f.ransomware ? 'Mar 21 (after day-4 ransomware)' : 'Mar 15 ~17:00'}
+  Containment:        ${scStamp(f.containedAt + 10, true)}
+  Recovery complete:  ${f.ransomware ? 'Mar 21 (after day-4 ransomware)' : scStamp(st.elapsed, true)}
 
 <span class="log-warn">IMPACT:</span>
   - ${scN(f.recordsExposed)} patient records exposed (PII + PHI)
@@ -758,7 +783,7 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
   - Estimated breach cost: $${(f.recordsExposed * 40 / 3 / 1e6).toFixed(1)}M (notification, credit monitoring, legal)
 
 <span class="log-warn">VENDOR RISK:</span>
-  - NetPulse had local admin on all endpoints (excessive privilege)
+  - NetPulse's service account in Domain Admins and local admin on every endpoint (excessive privilege)
   - No verification of update integrity beyond vendor signing
   - No network segmentation between RMM and clinical systems`
         },
@@ -775,7 +800,7 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
                 ? `HIPAA notification goes out within the deadline — to ${scN(f.scopedRecords || 180000)} patients. The ${scN(f.recordsExposed - (f.scopedRecords || 180000))} whose records sat in the other systems aren't in it, and HHS OCR finds them during its review. `
                 : f.scopePrecise ? 'HIPAA notification executed accurately within deadline. HHS investigation finds Vertex responded appropriately. '
                 : `HIPAA notification covers every patient in the affected systems — ${scN(f.recordsExposed)}, over-inclusive but defensible. `
-                  + (f.attackerTipped ? (f.saw_auditGap ? 'Your note on the 10:55 audit shutdown explains why to OCR\'s satisfaction. ' : 'OCR asks why record-level logging stops at 10:55; nobody on your team wrote it down. ') : ''))
+                  + (f.attackerTipped ? (f.saw_auditGap ? 'Your note on the audit shutdown explains why to OCR\'s satisfaction. ' : `OCR asks why record-level logging stops at ${scStamp(f.triagedAt + 43)}; nobody on your team wrote it down. `) : ''))
               + (f.saw_dbprod ? 'The discovery time is documented to the minute — 09:10, when DB-PROD-01 showed up in the beacon list — so the 60-day clock is beyond dispute. ' : 'OCR asks when Vertex first knew PHI systems were involved; the earliest documented answer is the 10:35 alert. ')
               + (f.vendorCoordinated ? 'NetPulse implements build pipeline integrity monitoring based on your findings.' : 'NetPulse rebuilds its pipeline from other customers\' reports; yours arrives a week late.')
               + (st.findings.length >= 8 ? ` The IOC appendix carries ${st.findings.length} documented findings.` : ''),
