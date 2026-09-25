@@ -624,6 +624,13 @@ body::after {
 .menu-note { font-size: 12px; color: var(--green-dim); line-height: 1.5; margin: -8px 0 16px; }
 .menu-action[aria-pressed="true"] { background: var(--green-bg-dim); border-color: var(--green); }
 .menu-action[aria-pressed="true"]::before { content: '◆ '; }
+.menu-action[hidden], #menu-close-btn[hidden] { display: none; }
+#menu-modal-inner:focus { outline: none; }
+.menu-reset { flex: 0 1 auto; color: var(--red-dim); border-color: var(--red-dim); font-size: 12px; }
+.menu-reset:hover { color: var(--red); border-color: var(--red); background: var(--red-bg-dim); }
+.menu-reset.armed { color: var(--bg); background: var(--red); border-color: var(--red); }
+.menu-reset-note { color: var(--red); margin-top: -8px; }
+.menu-reset-note:empty { display: none; }
 .choice-btn .unlock-tag { display: block; font-size: 10px; letter-spacing: 1px; color: var(--green); padding-left: 24px; margin-top: 2px; }
 
 /* Choice buttons */

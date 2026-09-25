@@ -56,14 +56,14 @@ document.addEventListener('keydown', function bootKey(e) {
   bootDone = true;
   document.removeEventListener('keydown', bootKey);
   $('boot-screen').style.display = 'none';
-  startGame();
+  openMenu(); // pick an incident; nothing starts until you do
 });
 $('boot-screen').addEventListener('click', function() {
   if (bootIdx < BOOT_LINES.length) { skipBoot(); return; }
   if (bootDone) return;
   bootDone = true;
   $('boot-screen').style.display = 'none';
-  startGame();
+  openMenu();
 });
 
 setTimeout(runBoot, 400);
@@ -1046,7 +1046,11 @@ function openMenu() {
   $('menu-warning').textContent = incidentInProgress()
     ? `${inc.ticketId} is still open (phase ${STATE.phaseIdx + 1} of ${PHASE_NAMES.length}). Starting another incident abandons it — progress is lost.`
     : '';
-  $('menu-replay').textContent = `↺ REPLAY ${inc.ticketId}`;
+  // Before the first incident there is nothing to replay or go back to
+  $('menu-replay').hidden = !inc;
+  $('menu-close-btn').hidden = !inc;
+  if (inc) $('menu-replay').textContent = `↺ REPLAY ${inc.ticketId}`;
+  disarmReset();
   const bests = loadBests();
   $('scenario-list').innerHTML = INCIDENTS.map((i, idx) => `
     <button class="scenario-row${i === inc ? ' current' : ''}" data-idx="${idx}">
@@ -1058,13 +1062,56 @@ function openMenu() {
   $('clock-realtime').setAttribute('aria-pressed', String(STATE.clockMode === 'realtime'));
   $('clock-turn').setAttribute('aria-pressed', String(STATE.clockMode === 'turn'));
   $('menu-modal').classList.add('visible');
-  $('menu-close-btn').focus({ preventScroll: true });
+  // With nothing loaded, focus the dialog rather than a button: the key that dismissed
+  // the boot screen would otherwise land on it and start an incident
+  (inc ? $('menu-close-btn') : $('menu-modal-inner')).focus({ preventScroll: true });
   $('menu-modal-inner').scrollTop = 0; // on phones the list scrolls; keep the warning in view
 }
 function closeMenu() {
+  if (!STATE.incident) return; // nothing behind the menu yet: pick an incident
   $('menu-modal').classList.remove('visible');
+  disarmReset();
   if (menuReturnFocus && document.contains(menuReturnFocus)) menuReturnFocus.focus();
 }
+
+// ── DELETE GAME DATA ───────────────────────────────
+// Everything this game keeps in the browser (personal bests, clock setting) is
+// under 'pumaresponse.'. Deleting takes two presses: the first arms the button
+// for a few seconds. An incident in progress is abandoned and the menu starts fresh.
+let resetTimer = null;
+function disarmReset() {
+  clearTimeout(resetTimer);
+  $('menu-reset').classList.remove('armed');
+  $('menu-reset').textContent = 'DELETE ALL GAME DATA';
+  $('menu-reset-note').textContent = '';
+}
+function resetAllData() {
+  for (const store of [localStorage, sessionStorage]) {
+    try { Object.keys(store).filter(k => k.startsWith('pumaresponse.')).forEach(k => store.removeItem(k)); } catch (e) {}
+  }
+  STATE.siemTimers.forEach(clearTimeout);
+  STATE.siemTimers = [];
+  STATE.played.clear();
+  STATE.clockMode = 'realtime';
+  STATE.started = false;
+  STATE.incident = null;
+  $('game-screen').classList.remove('visible');
+  $('end-screen').classList.remove('visible');
+  openMenu();
+  $('menu-warning').textContent = 'All game data deleted from this browser: personal bests and settings.';
+}
+$('menu-reset').addEventListener('click', () => {
+  const btn = $('menu-reset');
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed');
+    btn.textContent = 'PRESS AGAIN TO DELETE';
+    $('menu-reset-note').textContent = 'This deletes your personal bests and clock setting, and abandons any incident in progress. It can\'t be undone.';
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(disarmReset, 6000);
+    return;
+  }
+  resetAllData();
+});
 function restartWith(incident) {
   $('menu-modal').classList.remove('visible');
   startGame(incident);
@@ -1088,7 +1135,7 @@ $('menu-modal').addEventListener('click', (e) => {
 $('menu-modal').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closeMenu(); return; }
   if (e.key === 'Tab') {
-    const focusable = $('menu-modal-inner').querySelectorAll('button');
+    const focusable = $('menu-modal-inner').querySelectorAll('button:not([hidden])');
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }

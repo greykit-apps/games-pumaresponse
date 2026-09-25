@@ -24,7 +24,7 @@ Each playthrough assigns one of seven real-world incident scenarios, picked at r
 - **Real-time performance metrics** tracking four scoring dimensions as you play
 - **Dynamic outcome feedback** showing the consequences of each decision with point breakdowns
 - **Phase decision chain** visualizing your choices across all six phases
-- **Personal bests** per scenario, remembered in your browser and shown in the ↺ scenario picker
+- **Personal bests** per scenario, remembered in your browser and shown in the ↺ scenario picker. **Delete all game data** in the same menu clears bests and settings (two presses)
 - **Teaching debrief**: every finding you were shown, tagged or missed, labelled with its MITRE ATT&CK technique (linked to attack.mitre.org)
 - **Copy result**: a spoiler-free summary for sharing: grade, one coloured square per phase, findings
 - **Full keyboard support** alongside mouse/touch controls
@@ -79,9 +79,10 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). Responsive on mobil
 ### Game Flow
 
 1. **Boot sequence** — Watch the MSSP platform initialize (or press any key to skip)
-2. **Incident assignment** — Read the briefing, IOCs, and SIEM alerts
-3. **Six decision phases** — Read and tag the evidence, start the clock when you're ready, choose your response, and see the outcome and score impact
-4. **Performance debrief** — Get your final grade (A through F) with a full scorecard breakdown, then replay the same incident, start a new one, or choose a scenario
+2. **Incident menu** — Every visit opens here, with nothing running: take a random incident or choose one, and set the decision clock
+3. **Incident assignment** — Read the briefing, IOCs, and SIEM alerts
+4. **Six decision phases** — Read and tag the evidence, start the clock when you're ready, choose your response, and see the outcome and score impact
+5. **Performance debrief** — Get your final grade (A through F) with a full scorecard breakdown, then replay the same incident, start a new one, or choose a scenario
 
 ![End screen — performance scorecard and phase decision chain](screenshots/endscreen.png)
 

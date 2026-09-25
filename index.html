@@ -25,7 +25,7 @@
     <div class="logo-sub">MANAGED SECURITY SERVICES  //  INCIDENT RESPONSE PLATFORM v1.0.0</div>
   </div>
   <div id="boot-log"></div>
-  <div id="boot-prompt" style="display:none">▋ PRESS ANY KEY TO BEGIN SHIFT</div>
+  <div id="boot-prompt" style="display:none">▋ PRESS ANY KEY TO CONTINUE</div>
   <div id="boot-skip-hint">TAP TO SKIP</div>
 </div>
 
@@ -103,7 +103,7 @@
 
 <!-- INCIDENT MENU -->
 <div id="menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
-  <div id="menu-modal-inner">
+  <div id="menu-modal-inner" tabindex="-1">
     <h2 id="menu-title">// INCIDENT CONTROL</h2>
     <p id="menu-warning" class="menu-warning"></p>
     <div class="menu-actions">
@@ -118,6 +118,12 @@
     <p class="menu-note">Real-time: each phase opens with the clock stopped so you can read. Starting the clock shows your options, and the attacker keeps moving until you decide. Turn-based: no clock.</p>
     <div class="menu-section">CHOOSE A SCENARIO</div>
     <div id="scenario-list"></div>
+    <div class="menu-section">GAME DATA</div>
+    <p class="menu-note">Personal bests and your clock setting are kept in this browser only.</p>
+    <div class="menu-actions">
+      <button class="menu-action menu-reset" id="menu-reset">DELETE ALL GAME DATA</button>
+    </div>
+    <p class="menu-note menu-reset-note" id="menu-reset-note" aria-live="polite"></p>
     <button id="menu-close-btn">[CANCEL]</button>
   </div>
 </div>
