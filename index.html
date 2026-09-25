@@ -4135,7 +4135,7 @@ function updateTagCount() {
   const el = $('ev-hint');
   if (!el) return;
   const phase = STATE.incident.phases[STATE.phaseIdx].name;
-  const n = STATE.findings.filter(f => f.phase === phase).length;
+  const n = new Set(STATE.evLines.filter((id, i) => id && $('ev-line-' + i).classList.contains('finding'))).size;
   const k = document.querySelectorAll('.ev-line.noise').length;
   el.innerHTML = `CLICK LINES TO TAG · <b>${n}</b> finding${n === 1 ? '' : 's'}${k ? ` · ${k} false` : ''}`;
 }
@@ -4153,11 +4153,14 @@ function tagLine(i) {
       $('ev-line-' + j).classList.add('tagged', 'finding');
       $('ev-line-' + j).setAttribute('aria-selected', 'true');
     });
-    STATE.flags['saw_' + id] = true;
-    STATE.findings.push({ phase, id, text });
-    Object.entries(FINDING_REWARD).forEach(([k, v]) => { STATE.scores[k] += v; });
-    addNote(phase, `Finding: ${short}`);
-    renderChoices(); // a finding can unlock an option
+    // The same indicator can surface in more than one phase; it counts (and pays) once
+    if (!STATE.flags['saw_' + id]) {
+      STATE.flags['saw_' + id] = true;
+      STATE.findings.push({ phase, id, text });
+      Object.entries(FINDING_REWARD).forEach(([k, v]) => { STATE.scores[k] += v; });
+      addNote(phase, `Finding: ${short}`);
+      renderChoices(); // a finding can unlock an option
+    }
   } else {
     el.classList.add('tagged', 'noise');
     el.setAttribute('aria-selected', 'true');
