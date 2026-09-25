@@ -554,7 +554,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
               proof: 'misclassified', brandsNotified: false, brandsLate: true, scopeAccurate: false,
               req10Finding: f.trailStopped,
             }),
-            outcome: 'By misclassifying the incident, you delay card brand notification by a week. The PFI investigation reveals the attacker specifically targeted cardholder data. Card brands impose $500K in fines for delayed notification. NovaPay\'s PCI-DSS certification is suspended. Their acquiring bank threatens to terminate the merchant processing relationship.',
+            outcome: 'By misclassifying the incident, you delay card brand notification by a week. The PFI investigation reveals the attacker specifically targeted cardholder data. Card brands add a $500K late-notification penalty on top of the base fine. NovaPay\'s PCI-DSS certification is suspended. Their acquiring bank threatens to terminate the merchant processing relationship.',
           },
           {
             key: 'D',
@@ -759,7 +759,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
 <span class="log-warn">FINANCIAL IMPACT:</span>
   - Crypto mining bill: ${fmtUSD(cbTotalMining(f, st))} (unauthorized GPU instances, all regions)
   - PFI engagement: ~$150,000
-  - Card brand fines: ${f.brandsLate ? '<span class="log-highlight">~$500,000+ (late notification)</span>' : f.brandsNotified ? 'TBD (notification on time)' : 'TBD (notification not yet filed)'}
+  - Card brand fines: ${f.brandsLate ? `<span class="log-highlight">~${fmtUSD(cbFines(f))} (late notification)</span>` : f.brandsNotified ? 'TBD (notification on time)' : 'TBD (notification not yet filed)'}
   - Breach notification costs: ~$2.1M (2.1M affected individuals)
   - Credit monitoring: ~$4.2M (2 years × 2.1M people)
 
@@ -807,7 +807,7 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
             sets: f => ({ consumerLate: true, brandsLate: f.brandsLate || !f.brandsNotified }),
             outcome: (f, st) => (cbFootholds(f, false).length
                 ? `AWS Support won't consider the credit until the account is clean — and ${cbFootholds(f, false).join(' and ')} ${cbFootholds(f, false).length > 1 ? 'are' : 'is'} still in it. `
-                : `AWS does credit the ${fmtUSD(cbTotalMining(f, st))}${f.saw_miners ? ' — the instance IDs and regions you documented in triage make it quick' : ''} — a rounding error compared to the $6.5M total breach cost. `)
+                : `AWS does credit the ${fmtUSD(cbTotalMining(f, st))}${f.saw_miners ? ' — the instance IDs and regions you documented in triage make it quick' : ''} — a rounding error compared to the ~$${((180000 + cbFines(f) + 6300000 + 350000 + cbTotalMining(f, st)) / 1e6).toFixed(1)}M total breach cost. `)
               + (f.brandsNotified
                 ? 'Meanwhile, the PFI waits a week for evidence access and consumer breach notifications are delayed.'
                 : 'Meanwhile, card brand notification is late, triggering accelerated fine schedules. Consumer breach notifications are delayed.')
