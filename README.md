@@ -8,7 +8,7 @@ PumaResponse is an incident response training simulator that puts you in the sea
 
 An interactive, browser-based simulator where you work through the six phases of incident response — **Triage, Containment, Investigation, Eradication, Recovery, and Post-Incident** — making branching decisions that are scored on response time, containment effectiveness, evidence preservation, and thoroughness.
 
-Each playthrough assigns one of seven real-world incident scenarios, picked at random from the ones you haven't played yet this session, or chosen from a list. You read situation briefings, examine forensic evidence and SIEM logs, and choose from three response options per phase. In the BEC scenario your decisions cascade: early choices change what later phases show, which options exist, and what they cost, and consequences carry forward into the debrief. The other six scenarios still score each phase independently.
+Each playthrough assigns one of seven real-world incident scenarios, picked at random from the ones you haven't played yet this session, or chosen from a list. You read situation briefings, examine forensic evidence and SIEM logs, and choose from three response options per phase. Your decisions cascade: early choices change what later phases show, which options exist, and what they cost, and consequences carry forward into the debrief.
 
 ![Triage phase — reading evidence and selecting a response](screenshots/triage.png)
 
@@ -19,8 +19,8 @@ Each playthrough assigns one of seven real-world incident scenarios, picked at r
 - **Live SIEM feed** with color-coded severity levels that updates as the incident unfolds
 - **Indicators of Compromise (IOCs)** displayed per scenario — file hashes, IPs, processes, domains, user agents
 - **Interactive evidence panels** with syntax-highlighted logs, email headers, and forensic artifacts
-- **Decision clock** (BEC scenario): each phase opens with the clock stopped so you can read at your own pace. Starting the clock reveals the response options, and while you decide the attacker keeps moving: the wire drains, forwarding rules fire, the second compromised account goes to work. Over-par decisions cost Response Time. Switch to turn-based in the ↺ menu for no clock at all
-- **Evidence tagging** (BEC scenario): tag the log lines that matter as findings. Findings can unlock response options and change later outcomes, false leads cost time, and the debrief lists what you missed
+- **Decision clock**: each phase opens with the clock stopped so you can read at your own pace. Starting the clock reveals the response options, and while you decide the attacker keeps moving: encryption spreads, the wire drains, data keeps leaving. Over-par decisions cost Response Time. Switch to turn-based in the ↺ menu for no clock at all
+- **Evidence tagging**: tag the log lines that matter as findings. Findings can unlock response options and change later outcomes, false leads cost time, and the debrief lists what you missed
 - **Real-time performance metrics** tracking four scoring dimensions as you play
 - **Dynamic outcome feedback** showing the consequences of each decision with point breakdowns
 - **Phase decision chain** visualizing your choices across all six phases
@@ -77,7 +77,7 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). Responsive on mobil
 
 1. **Boot sequence** — Watch the MSSP platform initialize (or press any key to skip)
 2. **Incident assignment** — Read the briefing, IOCs, and SIEM alerts
-3. **Six decision phases** — Read (and, in BEC, tag) the evidence; in BEC, start the clock when you're ready; choose your response, and see the outcome and score impact
+3. **Six decision phases** — Read and tag the evidence, start the clock when you're ready, choose your response, and see the outcome and score impact
 4. **Performance debrief** — Get your final grade (A through F) with a full scorecard breakdown, then replay the same incident, start a new one, or choose a scenario
 
 ![End screen — performance scorecard and phase decision chain](screenshots/endscreen.png)
