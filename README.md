@@ -19,6 +19,7 @@ Each playthrough assigns one of seven real-world incident scenarios, picked at r
 - **Live SIEM feed** with color-coded severity levels that updates as the incident unfolds
 - **Indicators of Compromise (IOCs)** displayed per scenario — file hashes, IPs, processes, domains, user agents
 - **Interactive evidence panels** with syntax-highlighted logs, email headers, and forensic artifacts
+- **Decision clock** (BEC scenario): each phase opens with the clock stopped so you can read at your own pace. Starting the clock reveals the response options, and while you decide the attacker keeps moving: the wire drains, forwarding rules fire, the second compromised account goes to work. Over-par decisions cost Response Time. Switch to turn-based in the ↺ menu for no clock at all
 - **Evidence tagging** (BEC scenario): tag the log lines that matter as findings. Findings can unlock response options and change later outcomes, false leads cost time, and the debrief lists what you missed
 - **Real-time performance metrics** tracking four scoring dimensions as you play
 - **Dynamic outcome feedback** showing the consequences of each decision with point breakdowns
@@ -67,7 +68,7 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). Responsive on mobil
 |-------|--------|
 | `A`–`D` or `1`–`4` | Select a response option (a fourth appears when a finding unlocks it) |
 | `↑` / `↓`, `Enter` (evidence focused) | Move through evidence lines and tag one as a finding |
-| `Enter` / `Space` | Advance to the next phase |
+| `Enter` / `Space` | Start the decision clock (clocked phases) · advance to the next phase |
 | Mouse / Touch | Click choices and buttons |
 | `↺` (header) | Replay the current incident, start a new random one, or choose a scenario — abandons the incident in progress |
 | `Esc` | Close the ↺ menu or the About dialog |
@@ -76,7 +77,7 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). Responsive on mobil
 
 1. **Boot sequence** — Watch the MSSP platform initialize (or press any key to skip)
 2. **Incident assignment** — Read the briefing, IOCs, and SIEM alerts
-3. **Six decision phases** — Read (and, in BEC, tag) the evidence, choose your response, and see the outcome and score impact
+3. **Six decision phases** — Read (and, in BEC, tag) the evidence; in BEC, start the clock when you're ready; choose your response, and see the outcome and score impact
 4. **Performance debrief** — Get your final grade (A through F) with a full scorecard breakdown, then replay the same incident, start a new one, or choose a scenario
 
 ![End screen — performance scorecard and phase decision chain](screenshots/endscreen.png)

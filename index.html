@@ -594,6 +594,41 @@ body::after {
 .ev-taggable .ev-line.noise::after { content: '  ✗ FALSE LEAD'; color: var(--red); font-size: 10px; letter-spacing: 1px; }
 .ev-taggable.locked .ev-line { cursor: default; }
 .choice-btn.unlocked { border-style: dashed; border-color: var(--green); }
+.live-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  letter-spacing: 1px;
+  padding: 6px 10px;
+  margin: 12px 0 8px;
+  border: 1px solid var(--green-dark);
+  color: var(--green-dim);
+}
+.live-strip.running { border-color: var(--amber-dim); color: var(--amber); }
+.live-strip.running.over-par { border-color: var(--red-dim); color: var(--red); }
+.live-strip .ls-clock::before { content: '⏸ '; }
+.live-strip.running .ls-clock::before { content: '● '; animation: blink 1s step-end infinite; }
+.start-clock-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 12px;
+  background: none;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: var(--font);
+  font-size: 14px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.start-clock-btn:hover { background: var(--amber); color: var(--bg); }
+.start-clock-btn small { display: block; font-size: 11px; letter-spacing: 0; margin-top: 4px; opacity: 0.8; }
+.outcome-clock { font-size: 11px; letter-spacing: 1px; color: var(--green-dim); margin-top: 4px; }
+.outcome-clock .neg { color: var(--red); }
+.menu-note { font-size: 12px; color: var(--green-dim); line-height: 1.5; margin: -8px 0 16px; }
+.menu-action[aria-pressed="true"] { background: var(--green-bg-dim); border-color: var(--green); }
+.menu-action[aria-pressed="true"]::before { content: '◆ '; }
 .choice-btn .unlock-tag { display: block; font-size: 10px; letter-spacing: 1px; color: var(--green); padding-left: 24px; margin-top: 2px; }
 
 /* Choice buttons */
@@ -1176,6 +1211,12 @@ body::after {
       <button class="menu-action" id="menu-replay">↺ REPLAY THIS INCIDENT</button>
       <button class="menu-action" id="menu-random">▸ NEW RANDOM INCIDENT</button>
     </div>
+    <div class="menu-section">DECISION CLOCK</div>
+    <div class="menu-actions">
+      <button class="menu-action" id="clock-realtime" aria-pressed="true">REAL-TIME</button>
+      <button class="menu-action" id="clock-turn" aria-pressed="false">TURN-BASED</button>
+    </div>
+    <p class="menu-note">Real-time: each phase opens with the clock stopped so you can read. Starting the clock shows your options, and the attacker keeps moving until you decide. Turn-based: no clock. Only the BEC scenario has a clock so far.</p>
     <div class="menu-section">CHOOSE A SCENARIO</div>
     <div id="scenario-list"></div>
     <button id="menu-close-btn">[CANCEL]</button>
@@ -1254,6 +1295,13 @@ $('boot-screen').addEventListener('click', function() {
 setTimeout(runBoot, 400);
 
 // ── INCIDENT SCENARIOS ─────────────────────────────
+// BEC: how much of the $340K wire has moved beyond recall, t minutes into the
+// Triage decision. $55K was already gone at handoff; the rest drains in steps.
+const BEC_WIRE_MOVED = [[0, 55000], [6, 100000], [12, 140000], [25, 200000], [45, 260000], [70, 340000]];
+function becWireMoved(t) {
+  return BEC_WIRE_MOVED.filter(([at]) => t >= at).pop()[1];
+}
+
 const INCIDENTS = [
   {
     id: 'RANSOMWARE',
@@ -1610,6 +1658,8 @@ const INCIDENTS = [
       vendorFraud: false,     // VP Sales account was used to redirect vendor payments
       legalEngaged: false,    // counsel assessed SEC / breach-notification duties
     },
+    // 2 real seconds per game minute once the decision clock starts; 10-minute par
+    clock: { rate: 0.5, par: 10 },
     debrief: f => {
       const vendorLoss = f.vendorFraud ? 87000 : 0;
       return [
@@ -1657,8 +1707,12 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Priority one: stop the money. Contact CFO to initiate wire recall with their bank.',
             quality: 'good',
             score: { time: 20, containment: 25, evidence: 5, thoroughness: 10 },
-            sets: { wireRecovered: 285000, recallFiled: true },
-            outcome: 'You immediately instruct Janet to call the bank\'s wire fraud department. Because it\'s within the 24-hour recall window, the bank initiates a SWIFT recall. $285,000 of the $340,000 is frozen before it leaves the correspondent bank. Quick action saved the majority of the funds.',
+            sets: (f, st) => ({ wireRecovered: 340000 - becWireMoved(st.phaseClock), recallFiled: true }),
+            outcome: (f, st) => {
+              const saved = 340000 - becWireMoved(st.phaseClock);
+              return `You instruct Janet to call the bank's wire fraud department. Because it's within the 24-hour recall window, the bank initiates a SWIFT recall. ${fmtUSD(saved)} of the $340,000 is frozen before it leaves the correspondent bank. `
+                + (saved >= 285000 ? 'Quick action saved the majority of the funds.' : saved >= 200000 ? 'Most of it — but every minute you spent deciding was money leaving the correspondent bank.' : 'The recall was the right call. It just came late.');
+            },
           },
           {
             key: 'B',
@@ -1666,8 +1720,9 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             desc: 'Understand the attack before acting. Check if the CEO\'s account is compromised.',
             quality: 'partial',
             score: { time: -10, containment: -15, evidence: 15, thoroughness: 10 },
-            sets: { wireRecovered: 140000, recallFiled: true, headersAnalyzed: true },
-            outcome: 'Your analysis confirms the SPF failure and pins the reply-to on a typosquat domain, ashf0rd-mfg.com — the attacker never needed to send from the real mailbox to receive the answers. But you spent 45 minutes before advising the bank recall. By then, $200,000 has already been forwarded through intermediary accounts and is unrecoverable.',
+            // The header analysis itself takes 40 minutes before anyone calls the bank
+            sets: (f, st) => ({ wireRecovered: 340000 - becWireMoved(st.phaseClock + 40), recallFiled: true, headersAnalyzed: true }),
+            outcome: (f, st) => `Your analysis confirms the SPF failure and pins the reply-to on a typosquat domain, ashf0rd-mfg.com — the attacker never needed to send from the real mailbox to receive the answers. But the analysis takes 40 minutes before you advise the bank recall. By then, ${fmtUSD(becWireMoved(st.phaseClock + 40))} has already been forwarded through intermediary accounts and is unrecoverable.`,
           },
           {
             key: 'C',
@@ -1678,6 +1733,14 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             sets: { attackerTipped: true, mfaBackdoor: true },
             outcome: 'The CEO is on vacation with limited connectivity. He doesn\'t respond for 3 hours. Meanwhile, the wire clears through intermediary banks and no recall is ever requested. Worse: your reply went to the Reply-To address — the attacker\'s typosquat — so they now know the MSSP is involved.',
           },
+        ],
+        live: (f, st) => `RECALLABLE NOW: ${fmtUSD(340000 - becWireMoved(st.phaseClock))} OF $340,000`,
+        timeline: [
+          { at: 6, sev: 'crit', text: 'Correspondent bank: $45,000 forwarded to intermediary (Hong Kong)' },
+          { at: 12, sev: 'crit', text: 'Correspondent bank: $40,000 more forwarded — second intermediary' },
+          { at: 25, sev: 'crit', text: 'Funds split across 4 accounts — $200,000 now beyond recall' },
+          { at: 45, sev: 'crit', text: 'OTC crypto desk purchase traced — $260,000 gone' },
+          { at: 70, sev: 'crit', text: 'Beneficiary account emptied — wire fully cleared' },
         ],
         siemEntries: [
           { time: '14:22', sev: 'crit', text: 'INCIDENT ASSIGNED — BEC / CEO Fraud — Ashford Mfg' },
@@ -1756,6 +1819,12 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             sets: { mfaBackdoor: false },
             outcome: 'You pull the attacker\'s Authenticator off the account before touching the password — with it gone, self-service reset has nothing to verify against. Password reset, sessions revoked, inbox rule and forwarding removed, ashf0rd-mfg.com blocked. This time the lockout actually holds.',
           },
+        ],
+        live: f => f.attackerTipped ? 'ATTACKER SESSION: ACTIVE · ATTACKER IS AWARE OF YOU' : 'ATTACKER SESSION: ACTIVE',
+        timeline: [
+          { at: 5, sev: 'warn', text: 'CEO mailbox: 60 more items read from 41.190.2.44', score: { evidence: -3 } },
+          { at: 10, sev: 'crit', text: 'Forwarding rule fired: "RE: Q1 vendor payments" sent to ashf0rd-mfg.com', score: { containment: -3 } },
+          { at: 18, sev: 'crit', text: 'CEO mailbox: bulk export of board-minutes folder started', score: { containment: -5, evidence: -3 } },
         ],
         siemEntries: f => [
           { time: '14:40', sev: 'crit', text: 'CEO account compromised — sign-in from Lagos, Nigeria' },
@@ -1852,6 +1921,12 @@ DMARC: <span class="log-warn">p=none</span> (policy: report only, no enforcement
             outcome: 'By treating this as two separate issues, you miss the connection between the credential phishing and the BEC. The VP Sales account — the one the attacker hasn\'t used yet — stays in their hands.',
           },
         ],
+        live: 'VP SALES ACCOUNT: NOT YET SECURED',
+        timeline: [
+          { at: 8, sev: 'warn', text: 'VP Sales mailbox: inbox rule "Sync" created from 41.190.2.44' },
+          { at: 16, sev: 'crit', text: 'VP Sales → Kessler Steel: "Updated remittance details for open invoices"',
+            sets: { vendorFraud: true }, score: { containment: -5 } },
+        ],
         siemEntries: f => [
           ...(f.mfaBackdoor && !f.ceoDisabled ? [{ time: '15:02', sev: 'crit', text: 'SSPR password reset — CEO account — from 41.190.2.44' }] : []),
           { time: '15:10', sev: 'warn', text: 'Credential phishing campaign identified — 12 targets' },
@@ -1904,7 +1979,7 @@ ${f.mfaBackdoor ? `
             desc: 'Clean up all attacker persistence AND fix the underlying email security gaps that allowed this.',
             quality: 'good',
             score: { time: 5, containment: 15, evidence: 5, thoroughness: 20 },
-            sets: f => ({ vendorFraud: !f.vpSecured, vpSecured: true, rulesRemain: false, mfaBackdoor: false }),
+            sets: f => ({ vendorFraud: f.vendorFraud || !f.vpSecured, vpSecured: true, rulesRemain: false, mfaBackdoor: false }),
             outcome: f => 'All malicious inbox rules and forwarding removed. Abuse report filed with Namecheap for ashf0rd-mfg.com — domain suspended within 4 hours. DMARC upgraded to p=reject, DKIM configured, SPF hardened to -all. External email warning banner deployed. MFA enforced for all users.'
               + (f.mfaBackdoor ? ' The MFA rollout includes a review of every registered method — the rogue Authenticator on the CEO account is finally removed.' : '')
               + (!f.vpSecured ? ' Pulling the VP Sales rule is what finally gets that account reset — too late for the vendor payments already redirected.' : ''),
@@ -1915,7 +1990,7 @@ ${f.mfaBackdoor ? `
             desc: 'Clean up the immediate persistence and add MFA. Leave email auth for later.',
             quality: 'partial',
             score: { time: 10, containment: 5, evidence: 0, thoroughness: 5 },
-            sets: f => ({ vendorFraud: !f.vpSecured, rulesRemain: false }),
+            sets: f => ({ vendorFraud: f.vendorFraud || !f.vpSecured, rulesRemain: false }),
             outcome: 'Rules removed and MFA deployed — good immediate actions. But DMARC remains at p=none, meaning the attacker (or anyone else) can still spoof ashford-mfg.com emails. The typosquat domain stays active. A competitor later uses the same technique.',
           },
           {
@@ -1924,9 +1999,13 @@ ${f.mfaBackdoor ? `
             desc: 'Minimal cleanup. Email auth improvements are out of scope for this IR engagement.',
             quality: 'bad',
             score: { time: 15, containment: -5, evidence: 0, thoroughness: -15 },
-            sets: f => ({ vendorFraud: !f.vpSecured, rulesRemain: false }),
+            sets: f => ({ vendorFraud: f.vendorFraud || !f.vpSecured, rulesRemain: false }),
             outcome: 'Rules removed but nothing else changes. The typosquat domain remains active. Three weeks later, the same attacker uses it to target Ashford\'s AP department with fake vendor invoices. DMARC still allows spoofing. The client questions why their MSSP didn\'t flag these gaps.',
           },
+        ],
+        live: 'TYPOSQUAT ashf0rd-mfg.com: LIVE',
+        timeline: [
+          { at: 10, sev: 'crit', text: 'ashf0rd-mfg.com: phishing wave to 6 Ashford AP staff', score: { thoroughness: -3 } },
         ],
         siemEntries: f => [
           { time: '16:00', sev: 'info', text: 'Eradication: removing attacker persistence from M365' },
@@ -3909,6 +3988,12 @@ const STATE = {
   evLines: null,       // this phase's finding id per evidence line (null = not taggable)
   evCursor: -1,
   choiceOrder: null,   // display order of this phase's choices (origIdx)
+  clockMode: 'realtime', // or 'turn' — player setting, remembered per browser
+  clockStarted: false, // this phase's decision clock has been started
+  phaseClock: 0,       // game minutes spent deciding this phase
+  fired: new Set(),    // this phase's timeline events that have happened
+  clockLog: [],        // { phase, text } — attacker actions that fired while you decided
+  decisionMinutes: 0,
   played: new Set(),   // incident ids started this session — random picks skip these
   siemTimers: [],      // pending staggered SIEM entries, cleared on restart
   started: false,
@@ -4078,8 +4163,7 @@ function tagLine(i) {
     el.setAttribute('aria-selected', 'true');
     STATE.falseLeads++;
     STATE.scores.time += FALSE_LEAD.time;
-    STATE.elapsed += FALSE_LEAD.minutes;
-    $('hdr-elapsed').textContent = formatElapsed(STATE.elapsed);
+    advanceClock(FALSE_LEAD.minutes); // a false lead burns incident time, clock running or not
     addNote(phase, `False lead: ${short} (${FALSE_LEAD.time} TIME)`);
   }
   renderScoreTracker();
@@ -4119,7 +4203,7 @@ $('action-body').addEventListener('keydown', (e) => {
 const CHOICE_KEYS = ['A', 'B', 'C', 'D', 'E'];
 function renderChoices() {
   const container = $('choices-container');
-  if (!container) return;
+  if (!container || !STATE.clockStarted) return;
   const phase = STATE.incident.phases[STATE.phaseIdx];
   const visible = phase.choices.map((c, i) => i).filter(i => !phase.choices[i].when || phase.choices[i].when(STATE.flags, STATE));
   const unlocked = [];
@@ -4142,10 +4226,101 @@ function renderChoices() {
   if (unlocked.length) addNote(phase.name, 'New response option unlocked by your finding');
 }
 
+// ── DECISION CLOCK ─────────────────────────────────
+// Opt-in per incident via `clock: { rate, par }` (game minutes per real second,
+// and the default per-phase par in game minutes; a phase may set its own `par`).
+// Each phase opens with the clock stopped: read, tag evidence, then start the clock
+// to reveal the options. While it runs, the phase's `timeline` plays out —
+// [{ at, when?, sev, text, sets?, score? }], `at` in minutes since the clock started.
+// The clock also stops while the tab is hidden or a dialog is open.
+try { if (localStorage.getItem('pumaresponse.clock') === 'turn') STATE.clockMode = 'turn'; } catch (e) {}
+
+function clockActive() {
+  return !!(STATE.incident && STATE.incident.clock) && STATE.clockMode === 'realtime';
+}
+function phasePar() {
+  const phase = STATE.incident.phases[STATE.phaseIdx];
+  return phase.par ?? STATE.incident.clock.par;
+}
+function clockStamp() {
+  return formatElapsed(Math.floor(STATE.elapsed + STATE.phaseClock)).replace(/^0/, '');
+}
+function clockRunning() {
+  return clockActive() && STATE.clockStarted && STATE.started && !STATE.awaitingContinue && !document.hidden
+    && !$('menu-modal').classList.contains('visible') && !$('about-modal').classList.contains('visible')
+    && !$('end-screen').classList.contains('visible');
+}
+
+// Advance this phase's clock (live ticks, or minutes burned by a false lead) and fire due events
+function advanceClock(minutes) {
+  STATE.phaseClock += minutes;
+  const phase = STATE.incident.phases[STATE.phaseIdx];
+  (resolve(phase.timeline) || []).forEach((ev, i) => {
+    if (STATE.fired.has(i) || ev.at > STATE.phaseClock || (ev.when && !ev.when(STATE.flags, STATE))) return;
+    STATE.fired.add(i);
+    Object.assign(STATE.flags, resolve(ev.sets) || {});
+    Object.entries(ev.score || {}).forEach(([k, v]) => { STATE.scores[k] += v; });
+    addSiemEntry(clockStamp(), ev.sev || 'crit', resolve(ev.text));
+    STATE.clockLog.push({ phase: phase.name, text: resolve(ev.text) });
+    renderScoreTracker();
+  });
+  updateClockUI();
+}
+
+function updateClockUI() {
+  if (!STATE.incident || STATE.phaseIdx >= STATE.incident.phases.length) return; // finished: nothing live
+  $('hdr-elapsed').textContent = formatElapsed(Math.floor(STATE.elapsed + STATE.phaseClock));
+  const strip = $('live-strip');
+  if (!strip) return;
+  const phase = STATE.incident.phases[STATE.phaseIdx];
+  const running = STATE.clockStarted && clockActive() && !STATE.awaitingContinue;
+  const par = phasePar();
+  strip.classList.toggle('running', running);
+  strip.classList.toggle('over-par', running && STATE.phaseClock > par);
+  const status = STATE.awaitingContinue ? 'CLOCK STOPPED — DECISION MADE'
+    : running ? `CLOCK RUNNING — ${Math.floor(STATE.phaseClock)} MIN (PAR ${par})`
+    : 'CLOCK STOPPED — READ THE BRIEFING';
+  const live = STATE.awaitingContinue ? null : resolve(phase.live); // the outcome box says what happened
+  strip.innerHTML = `<span class="ls-clock">${status}</span>${live ? `<span>${escapeHtml(live)}</span>` : ''}`;
+}
+
+function startClock() {
+  if (STATE.clockStarted || STATE.awaitingContinue) return;
+  STATE.clockStarted = true;
+  const gate = $('start-clock-btn');
+  if (gate) gate.remove();
+  $('choices-title').hidden = false;
+  renderChoices();
+  if (clockActive()) addSiemEntry(clockStamp(), 'info', `${STATE.incident.phases[STATE.phaseIdx].name}: decision clock started`);
+  updateClockUI();
+  const first = document.querySelector('.choice-btn');
+  if (first) first.focus({ preventScroll: true });
+  $('choices-title').scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+let lastTick = performance.now();
+setInterval(() => {
+  const now = performance.now();
+  const dt = (now - lastTick) / 1000;
+  lastTick = now;
+  if (clockRunning()) advanceClock(dt * STATE.incident.clock.rate);
+}, 250);
+
+function setClockMode(mode) {
+  STATE.clockMode = mode;
+  try { localStorage.setItem('pumaresponse.clock', mode); } catch (e) {}
+  $('clock-realtime').setAttribute('aria-pressed', String(mode === 'realtime'));
+  $('clock-turn').setAttribute('aria-pressed', String(mode === 'turn'));
+  // Switching to turn-based mid-read shouldn't leave the options locked behind the gate
+  if (mode === 'turn' && STATE.started && !STATE.clockStarted && $('start-clock-btn')) startClock();
+  updateClockUI();
+}
+
 // ── RENDER PHASE ───────────────────────────────────
 function renderPhase() {
   const phase = STATE.incident.phases[STATE.phaseIdx];
   const body = $('action-body');
+  STATE.awaitingContinue = false; // before anything reads it while drawing the new phase
 
   // Update header
   $('phase-indicator').textContent = `PHASE: ${phase.name}`;
@@ -4173,6 +4348,10 @@ function renderPhase() {
   const evidence = resolve(phase.evidence);
   const evidenceHtml = renderEvidence(resolve(evidence.content));
   STATE.choiceOrder = null;
+  STATE.phaseClock = 0;
+  STATE.fired = new Set();
+  STATE.clockStarted = !clockActive(); // clocked phases open stopped, behind the start button
+  const gated = !STATE.clockStarted;
 
   body.innerHTML = `
     ${carriedHtml}
@@ -4184,12 +4363,16 @@ function renderPhase() {
       <div class="ev-title">${escapeHtml(resolve(evidence.title))}${STATE.evLines ? '<span class="ev-hint" id="ev-hint" aria-live="polite"></span>' : ''}</div>
       ${evidenceHtml}
     </div>
-    <div class="section-title" style="margin-top:12px;">SELECT YOUR RESPONSE</div>
+    ${STATE.incident.clock ? '<div class="live-strip" id="live-strip" aria-live="off"></div>' : ''}
+    ${gated ? `<button class="start-clock-btn" id="start-clock-btn" onclick="startClock()">▶ START CLOCK — SHOW RESPONSE OPTIONS
+      <small>Take your time reading. Once the clock starts, the attacker keeps moving until you decide.</small></button>` : ''}
+    <div class="section-title" id="choices-title" style="margin-top:12px;"${gated ? ' hidden' : ''}>SELECT YOUR RESPONSE</div>
     <div class="choices-container" id="choices-container" role="group" aria-label="Response choices"></div>
     <div id="outcome-area" aria-live="polite"></div>
   `;
-  renderChoices();
+  if (!gated) renderChoices();
   indexFindings();
+  updateClockUI();
   body.scrollTop = 0; // new phase starts at the top, where carried consequences sit
 
   // Add SIEM entries for this phase
@@ -4223,8 +4406,22 @@ function selectChoice(idx) {
     STATE.scores[k] += choice.score[k];
   });
 
-  // Track elapsed time (base 30 min per phase, modified by time score)
-  STATE.elapsed += Math.max(10, 30 - choice.score.time);
+  // Time: minutes spent deciding (clock, or false leads when turn-based) plus the action itself.
+  // Over par on a live clock costs Response Time: -1 per 2 minutes over, capped at -10.
+  const clocked = clockActive();
+  const deliberation = Math.floor(STATE.phaseClock);
+  let parPenalty = 0;
+  if (clocked) {
+    const over = deliberation - phasePar();
+    if (over > 0) parPenalty = -Math.min(10, Math.ceil(over / 2));
+    STATE.scores.time += parPenalty;
+    STATE.decisionMinutes += deliberation;
+  }
+  STATE.elapsed += deliberation + (clocked ? Math.max(5, 20 - choice.score.time) : Math.max(10, 30 - choice.score.time));
+  STATE.phaseClock = 0;
+  const clockLine = clocked
+    ? `<div class="outcome-clock">DECIDED IN ${deliberation} MIN · PAR ${phasePar()}${parPenalty ? ` · <span class="neg">OVER PAR: TIME ${parPenalty}</span>` : ''}</div>`
+    : '';
 
   STATE.choices.push({ phase: phase.name, choice: choice.key, quality: choice.quality });
 
@@ -4255,6 +4452,7 @@ function selectChoice(idx) {
       <div class="outcome-title ${titleClass}">${titleText}</div>
       <div class="outcome-text">${escapeHtml(choice.outcome)}</div>
       <div class="outcome-score">${scoreLines}</div>
+      ${clockLine}
     </div>
     <button class="continue-btn" onclick="advancePhase()" id="continue-btn">
       ${STATE.phaseIdx < PHASE_NAMES.length - 1 ? 'PROCEED TO NEXT PHASE ▸' : 'COMPLETE INCIDENT ▸'}
@@ -4267,6 +4465,7 @@ function selectChoice(idx) {
     `${phase.name}: ${titleText}`);
 
   renderScoreTracker();
+  updateClockUI();
 
   // Scroll to outcome
   outcomeArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -4324,6 +4523,8 @@ function endGame() {
     <div class="sc-row"><span>Incident</span><span class="sc-val">${escapeHtml(STATE.incident.title)}</span></div>
     <div class="sc-row"><span>Client</span><span class="sc-val">${escapeHtml(STATE.incident.client)}</span></div>
     <div class="sc-row"><span>Total Elapsed</span><span class="sc-val">${formatElapsed(STATE.elapsed)}</span></div>
+    ${STATE.incident.clock ? `
+    <div class="sc-row"><span>Decision Clock</span><span class="sc-val">${STATE.clockMode === 'realtime' ? `Real-time · ${STATE.decisionMinutes} min deciding` : 'Turn-based'}</span></div>` : ''}
     ${Object.keys(STATE.findingText).length ? `
     <div class="sc-row"><span>Findings Tagged</span><span class="sc-val">${STATE.findings.length} of ${Object.keys(STATE.findingText).length}</span></div>
     <div class="sc-row"><span>False Leads</span><span class="sc-val">${STATE.falseLeads}</span></div>` : ''}
@@ -4356,11 +4557,14 @@ function endGame() {
   const consequences = STATE.carried.length ? `
     <div class="end-debrief-header" style="margin-top:12px;">CONSEQUENCES THAT CARRIED FORWARD</div>
     <div class="end-carried">${STATE.carried.map(c => `<div class="carried-item ${c.sev || 'bad'}"><span class="note-phase">[${escapeHtml(c.phase)}]</span> ${escapeHtml(c.text)}</div>`).join('')}</div>` : '';
+  const clockHtml = STATE.clockLog.length ? `
+    <div class="end-debrief-header" style="margin-top:12px;">WHILE THE CLOCK RAN</div>
+    <div class="end-carried">${STATE.clockLog.map(c => `<div class="carried-item bad"><span class="note-phase">[${escapeHtml(c.phase)}]</span> ${escapeHtml(c.text)}</div>`).join('')}</div>` : '';
   const missed = Object.entries(STATE.findingText).filter(([id]) => !STATE.flags['saw_' + id]);
   const missedHtml = missed.length ? `
     <div class="end-debrief-header" style="margin-top:12px;">EVIDENCE YOU DIDN'T TAG</div>
     <div class="end-carried">${missed.map(([, t]) => `<div class="carried-item info">${escapeHtml(t)}</div>`).join('')}</div>` : '';
-  debrief.innerHTML = `<div class="end-debrief-header">PHASE DECISIONS</div>${phases}${consequences}${missedHtml}`;
+  debrief.innerHTML = `<div class="end-debrief-header">PHASE DECISIONS</div>${phases}${clockHtml}${consequences}${missedHtml}`;
 
   $('end-screen').classList.add('visible');
   // Focus management: move focus to the end screen for accessibility
@@ -4380,6 +4584,12 @@ document.addEventListener('keydown', (e) => {
     if (displayIdx < btns.length) {
       selectChoice(parseInt(btns[displayIdx].dataset.idx));
     }
+  }
+  if ((key === 'ENTER' || key === ' ') && !STATE.awaitingContinue && $('start-clock-btn')
+      && !e.target.closest('button, #ev-taggable')) {
+    e.preventDefault();
+    startClock();
+    return;
   }
   if ((key === 'ENTER' || key === ' ') && STATE.awaitingContinue) {
     const btn = $('continue-btn');
@@ -4427,6 +4637,9 @@ function startGame(incident) {
   STATE.findings = [];
   STATE.findingText = {};
   STATE.falseLeads = 0;
+  STATE.clockLog = [];
+  STATE.decisionMinutes = 0;
+  STATE.phaseClock = 0;
   STATE.started = true;
 
   // Update header
@@ -4539,6 +4752,8 @@ function openMenu() {
       <span class="sr-client">${escapeHtml(i.client)}</span>
       <span class="sr-played">${i === inc ? 'CURRENT' : STATE.played.has(i.id) ? 'PLAYED' : ''}</span>
     </button>`).join('');
+  $('clock-realtime').setAttribute('aria-pressed', String(STATE.clockMode === 'realtime'));
+  $('clock-turn').setAttribute('aria-pressed', String(STATE.clockMode === 'turn'));
   $('menu-modal').classList.add('visible');
   $('menu-close-btn').focus({ preventScroll: true });
   $('menu-modal-inner').scrollTop = 0; // on phones the list scrolls; keep the warning in view
@@ -4558,6 +4773,8 @@ $('menu-btn').addEventListener('click', (e) => { e.stopPropagation(); openMenu()
 $('menu-close-btn').addEventListener('click', closeMenu);
 $('menu-replay').addEventListener('click', () => restartWith(STATE.incident));
 $('menu-random').addEventListener('click', () => restartWith());
+$('clock-realtime').addEventListener('click', () => setClockMode('realtime'));
+$('clock-turn').addEventListener('click', () => setClockMode('turn'));
 $('scenario-list').addEventListener('click', (e) => {
   const row = e.target.closest('.scenario-row');
   if (row) restartWith(INCIDENTS[+row.dataset.idx]);
