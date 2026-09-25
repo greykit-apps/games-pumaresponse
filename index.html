@@ -585,7 +585,8 @@ body::after {
 .evidence-box .log-ok { color: var(--green); }
 .ev-hint { float: right; color: var(--green-dim); letter-spacing: 0; }
 .ev-hint b { color: var(--green); font-weight: normal; }
-.ev-taggable .ev-line, .ev-taggable .ev-blank { display: block; }
+.ev-taggable .ev-line, .ev-taggable .ev-blank, .ev-taggable .ev-head { display: block; }
+.ev-taggable .ev-head { color: var(--green); }
 .ev-taggable .ev-line {
   cursor: pointer;
   border-left: 2px solid transparent;
@@ -7052,14 +7053,37 @@ const FINDING_RE = /<!--f:(\w+)-->/;
 const FINDING_REWARD = { evidence: 2 };
 const FALSE_LEAD = { time: -2, minutes: 2 };
 
+// Taggable evidence is coloured by what a token IS, never by whether it matters:
+// the same rules run over every line, so colour can't point at the findings.
+// Hand-placed red (log-highlight) is removed from taggable evidence first.
+// Summary screens (no markers) keep their authored colouring.
+const LEX_RULES = [
+  // severity / status words, as a SIEM would colour them
+  [/\b(CRITICAL|ALERT|FAIL(?:ED|URE)?|DENIED|BLOCKED|ERROR|SUCCESS|NOT CONFIGURED|DISABLED|NONE|MALICIOUS)\b/g, 'log-highlight'],
+  // IPv4 addresses, with optional port
+  [/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g, 'log-warn'],
+];
+// Section headers ("── EMAIL BODY ──") are structure, not evidence: not taggable
+const EV_HEADER_RE = /^\s*─{2,}.*─{2,}\s*$/;
+function isEvHeader(line) {
+  return !FINDING_RE.test(line) && EV_HEADER_RE.test(line.replace(/<[^>]+>/g, ''));
+}
+function lexHighlight(line) {
+  if (isEvHeader(line)) return line;
+  const plain = line.replace(/<span class="log-(?:highlight|ok)">([\s\S]*?)<\/span>/g, '$1');
+  // Only touch text between tags, never markup or entities' insides
+  return plain.split(/(<[^>]+>)/).map(seg => seg.startsWith('<') ? seg
+    : LEX_RULES.reduce((t, [re, cls]) => t.replace(re, m => `<span class="${cls}">${m}</span>`), seg)).join('');
+}
+
 function renderEvidence(content) {
   if (!FINDING_RE.test(content)) { STATE.evLines = null; return `<pre>${content}</pre>`; }
-  const lines = content.split('\n');
+  const lines = content.split('\n').map(lexHighlight);
   STATE.evLines = lines.map(l => (l.match(FINDING_RE) || [])[1] || null);
   STATE.evCursor = -1;
-  const rows = lines.map((l, i) => l.trim()
-    ? `<span class="ev-line" id="ev-line-${i}" role="option" aria-selected="false" data-i="${i}">${l.replace(FINDING_RE, '')}</span>`
-    : '<span class="ev-blank"> </span>').join('');
+  const rows = lines.map((l, i) => !l.trim() ? '<span class="ev-blank"> </span>'
+    : isEvHeader(l) ? `<span class="ev-head">${l}</span>`
+    : `<span class="ev-line" id="ev-line-${i}" role="option" aria-selected="false" data-i="${i}">${l.replace(FINDING_RE, '')}</span>`).join('');
   return `<pre class="ev-taggable" id="ev-taggable" tabindex="0" role="listbox" aria-multiselectable="true"
     aria-label="Evidence lines. Arrow keys move, Enter tags the line as a finding.">${rows}</pre>`;
 }
