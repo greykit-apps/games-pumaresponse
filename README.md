@@ -152,4 +152,4 @@ Run one scenario per call and reload between runs.
 
 ## License
 
-Not yet specified.
+MIT — see [LICENSE](LICENSE).
