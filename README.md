@@ -117,7 +117,7 @@ The simulator teaches real-world incident response trade-offs grounded in NIST/S
 
 ## Tech Stack
 
-- Vanilla HTML, CSS, and JavaScript — single `index.html` file (~226 KB)
+- Vanilla HTML, CSS, and JavaScript — plain files, no bundling
 - No frameworks, no build step, no external dependencies
 - CRT terminal aesthetic with CSS custom properties and animations
 - Full keyboard accessibility with ARIA labels and focus management
@@ -126,7 +126,14 @@ The simulator teaches real-world incident response trade-offs grounded in NIST/S
 
 ```
 pumaresponse/
-├── index.html          # Single-file application
+├── index.html          # Markup; loads the stylesheet, engine and scenarios
+├── css/
+│   └── style.css
+├── js/
+│   ├── game.js         # Engine: rendering, tagging, clock, scoring, menus
+│   └── scenarios/      # One file per incident, each calling INCIDENTS.push({...})
+│       ├── ransomware.js, bec.js, supply-chain.js, insider.js,
+│       └── cloud-breach.js, ddos-diversion.js, webapp-rce.js
 ├── tools/
 │   └── scenario-harness.js   # Dev tool: walks every decision path, checks invariants, calibrates grades
 ├── screenshots/        # Game screenshots
@@ -140,7 +147,7 @@ pumaresponse/
 
 ## Development
 
-Each scenario is a data object in `index.html`'s `INCIDENTS` array. Any field can be a plain value or a function of the run's state, which is how later phases react to earlier choices. The mechanics are documented where they're implemented — search for `EVIDENCE TAGGING` and `DECISION CLOCK`.
+Each scenario lives in its own file under `js/scenarios/` and registers itself with `INCIDENTS.push({...})`; the `<script>` order in `index.html` is the order scenarios appear in the menu. To add one, write a new file and add its `<script>` tag after the others. Any field can be a plain value or a function of the run's state, which is how later phases react to earlier choices. The mechanics are documented where they're implemented in `js/game.js` — search for `EVIDENCE TAGGING` and `DECISION CLOCK`.
 
 After changing a scenario, check it with the harness. Serve the repo (`python3 -m http.server 8000`), open the game, and in the browser console:
 
