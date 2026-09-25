@@ -737,6 +737,18 @@ body::after {
 .carried-item.info::before { color: var(--amber); }
 .carried-score { font-size: 11px; white-space: nowrap; }
 .end-carried { text-align: left; max-width: 560px; margin: 0 auto; }
+.attack-tag {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--amber);
+  border: 1px solid var(--amber-dim);
+  padding: 0 4px;
+  margin-left: 4px;
+  text-decoration: none;
+  text-indent: 0;
+}
+.attack-tag:hover { background: var(--amber); color: var(--bg); }
 .carried-score .pos { color: var(--green); }
 .carried-score .neg { color: var(--red); }
 .outcome-text {
@@ -1211,6 +1223,7 @@ body::after {
     <button class="overlay-btn" id="replay-incident-btn">REPLAY THIS INCIDENT</button>
     <button class="overlay-btn" id="new-incident-btn">NEW INCIDENT</button>
     <button class="overlay-btn" id="choose-incident-btn">CHOOSE SCENARIO</button>
+    <button class="overlay-btn" id="copy-result-btn">COPY RESULT</button>
   </div>
 </div>
 
@@ -1680,6 +1693,25 @@ const INCIDENTS = [
     // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
     // changing this scenario's scores, carried penalties or findings.
     bestScore: 333,
+    // MITRE ATT&CK (Enterprise v19) technique per finding, shown in the debrief.
+    // Findings that aren't adversary behavior (missing controls, business facts) are omitted.
+    attack: {
+      svcBackupCtx: "T1053.005 Scheduled Task/Job: Scheduled Task",
+      lsassInject: "T1055 Process Injection",
+      vssDelete: "T1490 Inhibit System Recovery",
+      smbLateral: "T1021.002 Remote Services: SMB/Windows Admin Shares",
+      beaconC2: "T1071.001 Application Layer Protocol: Web Protocols",
+      dcsync: "T1003.006 OS Credential Dumping: DCSync",
+      exfilDest: "T1048.002 Exfiltration Over Alternative Protocol: Exfiltration Over Asymmetric Encrypted Non-C2 Protocol",
+      gpoMod: "T1484.001 Domain or Tenant Policy Modification: Group Policy Modification",
+      wmiSub: "T1546.003 Event Triggered Execution: Windows Management Instrumentation Event Subscription",
+      fallbackC2: "T1008 Fallback Channels",
+      phishXlsm: "T1566.001 Phishing: Spearphishing Attachment",
+      stage2: "T1059.001 Command and Scripting Interpreter: PowerShell",
+      credTheft: "T1003.001 OS Credential Dumping: LSASS Memory",
+      stagingDir: "T1560.001 Archive Collected Data: Archive via Utility",
+      c2Live: "T1071.001 Application Layer Protocol: Web Protocols",
+    },
     debrief: f => {
       const foot = rwFoothold(f);
       return [
@@ -2401,6 +2433,20 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
     // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
     // changing this scenario's scores, carried penalties or findings.
     bestScore: 334,
+    // MITRE ATT&CK (Enterprise v19) technique per finding, shown in the debrief.
+    // Findings that aren't adversary behavior (missing controls, business facts) are omitted.
+    attack: {
+      replyTo: "T1583.001 Acquire Infrastructure: Domains",
+      spfFail: "T1684.002 Social Engineering: Email Spoofing",
+      lagos: "T1078.004 Valid Accounts: Cloud Accounts",
+      inboxRule: "T1564.008 Hide Artifacts: Email Hiding Rules",
+      forwarding: "T1114.003 Email Collection: Email Forwarding Rule",
+      authApp: "T1098.005 Account Manipulation: Device Registration",
+      phishLink: "T1566.002 Phishing: Spearphishing Link",
+      credsEntered: "T1598.003 Phishing for Information: Spearphishing Link",
+      vpSales: "T1078.004 Valid Accounts: Cloud Accounts",
+      sspr: "T1098 Account Manipulation",
+    },
     debrief: f => {
       const vendorLoss = f.vendorFraud ? 87000 : 0;
       return [
@@ -2988,6 +3034,26 @@ ${f.mfaBackdoor ? `
     // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
     // changing this scenario's scores, carried penalties or findings.
     bestScore: 343,
+    // MITRE ATT&CK (Enterprise v19) technique per finding, shown in the debrief.
+    // Findings that aren't adversary behavior (missing controls, business facts) are omitted.
+    attack: {
+      npext: "T1195.002 Supply Chain Compromise: Compromise Software Supply Chain",
+      signCert: "T1553.002 Subvert Trust Controls: Code Signing",
+      staging: "T1071.001 Application Layer Protocol: Web Protocols",
+      c2ip: "T1071.001 Application Layer Protocol: Web Protocols",
+      dbprod: "T1071.001 Application Layer Protocol: Web Protocols",
+      credTheft: "T1003.001 OS Credential Dumping: LSASS Memory",
+      healthCheck: "T1543.003 Create or Modify System Process: Windows Service",
+      dnsFallback: "T1008 Fallback Channels",
+      patientsQuery: "T1213.006 Data from Information Repositories: Databases",
+      exfil: "T1041 Exfiltration Over C2 Channel",
+      antiForensics: "T1070.004 Indicator Removal: File Deletion",
+      buildServer: "T1195.002 Supply Chain Compromise: Compromise Software Supply Chain",
+      keyTheft: "T1552.004 Unsecured Credentials: Private Keys",
+      lateralCS: "T1543.003 Create or Modify System Process: Windows Service",
+      sqlAudit: "T1213.006 Data from Information Repositories: Databases",
+      auditGap: "T1685 Disable or Modify Tools",
+    },
     debrief: f => [
       ['Endpoints Compromised', `342 took the trojanized update · ${f.hostsStaged} carried second-stage tooling`
         + (f.reinfected > 0 ? ` · ${f.reinfected} reinfected` : '') + (f.ransomware ? ' · 64 encrypted' : '')],
@@ -3739,6 +3805,22 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
     // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
     // changing this scenario's scores, carried penalties or findings.
     bestScore: 357,
+    // MITRE ATT&CK (Enterprise v19) technique per finding, shown in the debrief.
+    // Findings that aren't adversary behavior (missing controls, business facts) are omitted.
+    attack: {
+      usb: "T1052.001 Exfiltration Over Physical Medium: Exfiltration over USB",
+      gdrive: "T1567.002 Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      mega: "T1567.002 Exfiltration Over Web Service: Exfiltration to Cloud Storage",
+      bulkRead: "T1039 Data from Network Shared Drive",
+      homeIp: "T1078.004 Valid Accounts: Cloud Accounts",
+      fwdRule: "T1114.003 Email Collection: Email Forwarding Rule",
+      uavGuidance: "T1039 Data from Network Shared Drive",
+      gmailAttach: "T1048 Exfiltration Over Alternative Protocol",
+      antiForensics: "T1070.004 Indicator Removal: File Deletion",
+      scopeCreep: "T1039 Data from Network Shared Drive",
+      dlpMonitor: "T1052.001 Exfiltration Over Physical Medium: Exfiltration over USB",
+      foreignRecipient: "T1048 Exfiltration Over Alternative Protocol",
+    },
     debrief: f => [
       ['ITAR Files Exfiltrated', `${insiderNum(f.itarFiles)} (${insiderNum(f.itarFiles - INSIDER_ITAR_AT_HANDOFF)} after the MSSP took the case)`],
       ['Subject Tipped Off', f.alertedAt ? `Yes — during ${f.alertedAt}` : 'Not until the termination meeting'],
@@ -4569,6 +4651,26 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
     // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
     // changing this scenario's scores, carried penalties or findings.
     bestScore: 331,
+    // MITRE ATT&CK (Enterprise v19) technique per finding, shown in the debrief.
+    // Findings that aren't adversary behavior (missing controls, business facts) are omitted.
+    attack: {
+      torKey: "T1078.004 Valid Accounts: Cloud Accounts",
+      stsSession: "T1098.001 Account Manipulation: Additional Cloud Credentials",
+      backdoorUser: "T1136.003 Create Account: Cloud Account",
+      miners: "T1496.001 Resource Hijacking: Compute Hijacking",
+      s3Exfil: "T1530 Data from Cloud Storage",
+      backdoor2: "T1136.003 Create Account: Cloud Account",
+      exposure: "T1686.001 Disable or Modify System Firewall: Cloud Firewall",
+      masterPw: "T1098 Account Manipulation",
+      manualSnap: "T1578.001 Modify Cloud Compute Infrastructure: Create Snapshot",
+      asiaKey: "T1550.001 Use Alternate Authentication Material: Application Access Token",
+      antiForensics: "T1685.002 Disable or Modify Tools: Disable or Modify Cloud Log",
+      auditGone: "T1685.002 Disable or Modify Tools: Disable or Modify Cloud Log",
+      fullDump: "T1213.006 Data from Information Repositories: Databases",
+      flowBytes: "T1048 Exfiltration Over Alternative Protocol",
+      piDigest: "T1213.006 Data from Information Repositories: Databases",
+      snapShare: "T1537 Transfer Data to Cloud Account",
+    },
     debrief: (f, st) => {
       const persist = cbFootholds(f, true);
       return [
@@ -5380,6 +5482,21 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
     // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
     // changing this scenario's scores, carried penalties or findings.
     bestScore: 338,
+    // MITRE ATT&CK (Enterprise v19) technique per finding, shown in the debrief.
+    // Findings that aren't adversary behavior (missing controls, business facts) are omitted.
+    attack: {
+      sqli: "T1190 Exploit Public-Facing Application",
+      lateral: "T1021.004 Remote Services: SSH",
+      posPush: "T1072 Software Deployment Tools",
+      beacon: "T1071.001 Application Layer Protocol: Web Protocols",
+      dllHook: "T1055.001 Process Injection: Dynamic-link Library Injection",
+      buffer: "T1074.001 Data Staged: Local Data Staging",
+      exfil: "T1041 Exfiltration Over C2 Channel",
+      persist: "T1572 Protocol Tunneling",
+      usersDump: "T1213.006 Data from Information Repositories: Databases",
+      plaintextKeys: "T1552.004 Unsecured Credentials: Private Keys",
+      authKeys: "T1098.004 Account Manipulation: SSH Authorized Keys",
+    },
     debrief: f => [
       ['Cards Stolen', ddosN(ddosCards(f))],
       ['Stores Affected', `${ddosStores(f)} of 52 (${ddosTerminals(f)} terminals)`],
@@ -6070,6 +6187,21 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
     // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
     // changing this scenario's scores, carried penalties or findings.
     bestScore: 370,
+    // MITRE ATT&CK (Enterprise v19) technique per finding, shown in the debrief.
+    // Findings that aren't adversary behavior (missing controls, business facts) are omitted.
+    attack: {
+      endpoint: "T1190 Exploit Public-Facing Application",
+      privesc: "T1068 Exploitation for Privilege Escalation",
+      liveSmb: "T1039 Data from Network Shared Drive",
+      ldapDA: "T1552.001 Unsecured Credentials: Credentials In Files",
+      svcReuse: "T1078.003 Valid Accounts: Local Accounts",
+      autossh: "T1543.002 Create or Modify System Process: Systemd Service",
+      smbReads: "T1039 Data from Network Shared Drive",
+      redrop: "T1505.003 Server Software Component: Web Shell",
+      rootkit: "T1014 Rootkit",
+      tunnel: "T1572 Protocol Tunneling",
+      rogueDA: "T1136.002 Create Account: Domain Account",
+    },
     debrief: f => {
       const n = wrcFolders(f.exfilMin);
       const present = wrcPresent(f);
@@ -7339,6 +7471,17 @@ function endGame() {
     subtitle = 'Critical errors throughout the response resulted in maximum damage, destroyed evidence, and a very unhappy client. Your MSSP manager would like a word.';
   }
 
+  // Shareable, spoiler-free summary: one square per phase, no choice text
+  const squares = STATE.choices.map(c => ({ good: '🟩', partial: '🟨', bad: '🟥' }[c.quality])).join('');
+  const nFindings = Object.keys(STATE.findingText).length;
+  STATE.resultText = [
+    `PumaResponse — ${STATE.incident.title.split('—')[0].trim()} (${STATE.incident.ticketId})`,
+    `Grade ${grade} · ${pct}% of best · ${STATE.incident.clock && STATE.clockMode === 'realtime' ? 'real-time' : 'turn-based'}`,
+    squares,
+    nFindings ? `Findings ${STATE.findings.length}/${nFindings} · false leads ${STATE.falseLeads}` : '',
+    'https://pumaresponse.greykit.com/',
+  ].filter(Boolean).join('\n');
+
   const prevBest = loadBests()[STATE.incident.id];
   const newBest = recordBest(STATE.incident.id, grade, pct);
 
@@ -7395,10 +7538,23 @@ function endGame() {
   const clockHtml = STATE.clockLog.length ? `
     <div class="end-debrief-header" style="margin-top:12px;">WHILE THE CLOCK RAN</div>
     <div class="end-carried">${STATE.clockLog.map(c => `<div class="carried-item bad"><span class="note-phase">[${escapeHtml(c.phase)}]</span> ${escapeHtml(c.text)}</div>`).join('')}</div>` : '';
-  const missed = Object.entries(STATE.findingText).filter(([id]) => !STATE.flags['saw_' + id]);
-  const missedHtml = missed.length ? `
-    <div class="end-debrief-header" style="margin-top:12px;">EVIDENCE YOU DIDN'T TAG</div>
-    <div class="end-carried">${missed.map(([, t]) => `<div class="carried-item info">${escapeHtml(t)}</div>`).join('')}</div>` : '';
+  // Every finding the player was shown: tagged first, then missed, each with its
+  // ATT&CK technique where the finding is adversary behavior (incident.attack)
+  const attack = STATE.incident.attack || {};
+  const findingRow = ([id, t]) => {
+    const tech = attack[id];
+    const m = tech && tech.match(/^(T\d{4})(?:\.(\d{3}))?\s+(.*)$/);
+    const tag = m ? ` <a class="attack-tag" href="https://attack.mitre.org/techniques/${m[1]}${m[2] ? '/' + m[2] : ''}/" target="_blank" rel="noopener">${escapeHtml(m[1] + (m[2] ? '.' + m[2] : ''))} ${escapeHtml(m[3])}</a>` : '';
+    return `<div class="carried-item ${STATE.flags['saw_' + id] ? 'good' : 'info'}">${escapeHtml(t)}${tag}</div>`;
+  };
+  const shown = Object.entries(STATE.findingText);
+  const tagged = shown.filter(([id]) => STATE.flags['saw_' + id]);
+  const missed = shown.filter(([id]) => !STATE.flags['saw_' + id]);
+  const missedHtml = shown.length ? `
+    ${tagged.length ? `<div class="end-debrief-header" style="margin-top:12px;">EVIDENCE YOU TAGGED</div>
+    <div class="end-carried">${tagged.map(findingRow).join('')}</div>` : ''}
+    ${missed.length ? `<div class="end-debrief-header" style="margin-top:12px;">EVIDENCE YOU DIDN'T TAG</div>
+    <div class="end-carried">${missed.map(findingRow).join('')}</div>` : ''}` : '';
   debrief.innerHTML = `<div class="end-debrief-header">PHASE DECISIONS</div>${phases}${clockHtml}${consequences}${missedHtml}`;
 
   $('end-screen').classList.add('visible');
@@ -7634,6 +7790,21 @@ $('menu-modal').addEventListener('keydown', (e) => {
 $('replay-incident-btn').addEventListener('click', () => restartWith(STATE.incident));
 $('new-incident-btn').addEventListener('click', () => restartWith());
 $('choose-incident-btn').addEventListener('click', openMenu);
+$('copy-result-btn').addEventListener('click', async () => {
+  const btn = $('copy-result-btn');
+  const text = STATE.resultText || '';
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+    // Fallback for contexts without the async clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch (e2) {}
+    ta.remove();
+  }
+  btn.textContent = ok ? 'COPIED ✓' : 'COPY FAILED';
+  setTimeout(() => { btn.textContent = 'COPY RESULT'; }, 2000);
+});
 
 // Console easter egg (guarded against duplicate execution)
 if (!window.__pumaConsoleLogged) {

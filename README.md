@@ -25,6 +25,8 @@ Each playthrough assigns one of seven real-world incident scenarios, picked at r
 - **Dynamic outcome feedback** showing the consequences of each decision with point breakdowns
 - **Phase decision chain** visualizing your choices across all six phases
 - **Personal bests** per scenario, remembered in your browser and shown in the ↺ scenario picker
+- **Teaching debrief**: every finding you were shown, tagged or missed, labelled with its MITRE ATT&CK technique (linked to attack.mitre.org)
+- **Copy result**: a spoiler-free summary for sharing: grade, one coloured square per phase, findings
 - **Full keyboard support** alongside mouse/touch controls
 - **Mobile-responsive** with tab-based panel switching on smaller screens
 
