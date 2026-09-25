@@ -429,8 +429,24 @@ function phasePar() {
   const phase = STATE.incident.phases[STATE.phaseIdx];
   return phase.par ?? STATE.incident.clock.par;
 }
+// ── INCIDENT WALL CLOCK ─────────────────────────────
+// Every SIEM timestamp is wall-clock time on the incident's own timeline: the
+// ticket is assigned at incident.assignedTime today, and time advances with the
+// game (elapsed + this phase's clock). Past midnight a stamp carries the real date.
+function hhmmToMin(t) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t || '');
+  return m ? +m[1] * 60 + +m[2] : null;
+}
+function wallStamp(minsSinceAssigned) {
+  const t = (hhmmToMin(STATE.incident.assignedTime) ?? 0) + Math.floor(minsSinceAssigned);
+  const day = Math.floor(t / 1440), m = ((t % 1440) + 1440) % 1440;
+  const hhmm = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  if (day === 0) return hhmm;
+  const d = new Date(); d.setDate(d.getDate() + day);
+  return `${MONTHS[d.getMonth()]} ${d.getDate()} ${hhmm}`;
+}
 function clockStamp() {
-  return formatElapsed(Math.floor(STATE.elapsed + STATE.phaseClock)).replace(/^0/, '');
+  return wallStamp(STATE.elapsed + STATE.phaseClock);
 }
 function clockRunning() {
   return clockActive() && STATE.clockStarted && STATE.started && !STATE.awaitingContinue && !document.hidden
@@ -563,9 +579,27 @@ function renderPhase() {
   body.scrollTop = 0; // new phase starts at the top, where carried consequences sit
 
   // Add SIEM entries for this phase
-  resolve(phase.siemEntries).forEach((e, i) => {
-    STATE.siemTimers.push(setTimeout(() => addSiemEntry(e.time, e.sev, resolve(e.text)), i * 400));
+  // Authored entries keep their spacing but slide onto the incident's actual clock:
+  // the phase's first entry lands on "now" (times wrapping past midnight unwrap first)
+  const entries = resolve(phase.siemEntries);
+  const authored = [];
+  entries.forEach((e, i) => {
+    let t = hhmmToMin(e.time);
+    const prev = authored.slice().reverse().find(x => x != null);
+    if (t != null && prev != null && t < prev - 720) t += 1440;
+    authored.push(t);
   });
+  const first = authored.find(x => x != null);
+  const phaseStart = STATE.elapsed;
+  entries.forEach((e, i) => {
+    const stamp = authored[i] == null ? e.time : wallStamp(phaseStart + authored[i] - first);
+    STATE.siemTimers.push(setTimeout(() => addSiemEntry(stamp, e.sev, resolve(e.text)), i * 400));
+  });
+  // Those events unfold while the player reads: the incident clock moves past them
+  // (reading still costs no decision time), so everything logged next comes after
+  const span = first == null ? 0 : Math.max(...authored.filter(x => x != null)) - first;
+  STATE.elapsed += span;
+  updateClockUI();
 
   renderScoreTracker();
   STATE.awaitingContinue = false;
@@ -648,7 +682,7 @@ function selectChoice(idx) {
 
   // Add outcome SIEM entry
   const sevMap = { good: 'success', partial: 'warn', bad: 'crit' };
-  addSiemEntry(formatElapsed(STATE.elapsed).replace(/^0/, ''), sevMap[choice.quality],
+  addSiemEntry(wallStamp(STATE.elapsed), sevMap[choice.quality],
     `${phase.name}: ${titleText}`);
 
   renderScoreTracker();
