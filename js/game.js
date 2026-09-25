@@ -56,14 +56,14 @@ document.addEventListener('keydown', function bootKey(e) {
   bootDone = true;
   document.removeEventListener('keydown', bootKey);
   $('boot-screen').style.display = 'none';
-  startGame();
+  openMenu(); // pick an incident; nothing starts until you do
 });
 $('boot-screen').addEventListener('click', function() {
   if (bootIdx < BOOT_LINES.length) { skipBoot(); return; }
   if (bootDone) return;
   bootDone = true;
   $('boot-screen').style.display = 'none';
-  startGame();
+  openMenu();
 });
 
 setTimeout(runBoot, 400);
@@ -212,13 +212,35 @@ function addNote(phase, text) {
 function renderNotes() {
   const body = $('notes-col');
   body.innerHTML = '<div class="section-title" style="margin-top:0;">ANALYST NOTES</div>';
-  STATE.notes.forEach(n => {
+  STATE.notes.forEach((n, i) => {
     const div = document.createElement('div');
     div.className = 'note-entry';
-    div.innerHTML = `<span class="note-phase">[${escapeHtml(n.phase)}]</span> ${escapeHtml(n.text)}`;
+    div.innerHTML = `<span class="note-phase">[${escapeHtml(n.phase)}]</span> ${escapeHtml(n.text)}`
+      + `<button type="button" class="note-remove" data-i="${i}" aria-label="Remove note: ${escapeHtml(n.text)}">REMOVE</button>`;
     body.appendChild(div);
   });
 }
+
+// Removing a note only tidies the notebook: a finding stays tagged and scored.
+function removeNote(i) {
+  STATE.notes.splice(i, 1);
+  renderNotes();
+  // Keep keyboard focus in the list: the note that moved up, else the one above
+  const btns = document.querySelectorAll('.note-remove');
+  const next = btns[Math.min(i, btns.length - 1)];
+  if (next) next.focus({ preventScroll: true });
+}
+$('notes-col').addEventListener('click', (e) => {
+  const btn = e.target.closest('.note-remove');
+  if (!btn) return;
+  e.stopPropagation(); // the right panel toggles its expanded view on any click
+  removeNote(+btn.dataset.i);
+});
+// Enter/Space on the button is its own click; don't let the global keys
+// (start clock, advance phase) act on it too
+$('notes-col').addEventListener('keydown', (e) => {
+  if (e.target.closest('.note-remove') && (e.key === 'Enter' || e.key === ' ')) e.stopPropagation();
+});
 
 // ── RENDER INCIDENT BRIEF ──────────────────────────
 // Offer natural break points inside long indicators: before "@" in addresses and
@@ -452,7 +474,7 @@ function clockStamp() {
 function clockRunning() {
   return clockActive() && STATE.clockStarted && STATE.started && !STATE.awaitingContinue && !document.hidden
     && !$('menu-modal').classList.contains('visible') && !$('about-modal').classList.contains('visible')
-    && !$('end-screen').classList.contains('visible');
+    && !$('end-screen').classList.contains('visible') && $('help-overlay').hidden;
 }
 
 // Advance this phase's clock (live ticks, or minutes burned by a false lead) and fire due events
@@ -855,6 +877,7 @@ function endGame() {
 document.addEventListener('keydown', (e) => {
   if (!STATE.started) return;
   if ($('menu-modal').classList.contains('visible') || $('about-modal').classList.contains('visible')) return;
+  if (!$('help-overlay').hidden) return; // the tour has its own keys
 
   const key = e.key.toUpperCase();
   // A-E and 1-5 select by display position (nth button on screen)
@@ -992,6 +1015,180 @@ $('about-modal').addEventListener('keydown', (e) => {
   }
 });
 
+// ── HELP TOUR ─────────────────────────────────────
+// Dims the game screen and lights up one area at a time, with a callout
+// pointing at it. Steps whose area isn't on screen right now are skipped. On
+// phones the tour switches to the panel it is describing. The clock is stopped
+// while the tour is open (clockRunning), and game keys are ignored.
+// Each step: the area to light, a title, an optional key line (highlighted), and the body
+const HELP_STEPS = [
+  { el: () => document.querySelector('.ioc-list'), panel: 'brief', title: 'INDICATORS OF COMPROMISE',
+    body: 'What was known at handoff: hashes, IPs, domains, accounts. They are where the investigation starts, not the whole story — each phase\'s evidence turns up more.' },
+  { el: () => $('score-tracker'), panel: 'brief', title: 'PERFORMANCE METRICS',
+    body: 'Your running score in four dimensions: response time, containment, evidence preservation and thoroughness. Decisions, tagged findings, false leads, time over par and consequences of earlier choices all move them. Your grade is the total as a percentage of the best possible for this incident.' },
+  { el: () => document.querySelector('#action-body .carried-box'), panel: 'action', title: 'CARRIED FORWARD',
+    body: 'Consequences of your earlier decisions that caught up with you in this phase, with the points each one cost or earned.' },
+  { el: () => document.querySelector('#action-body .narrative-box'), panel: 'action', title: 'SITUATION BRIEFING',
+    body: 'What has happened and what this phase asks of you. It is written for the path you are on, so it changes with the choices you made earlier.' },
+  { el: () => document.querySelector('#action-body .evidence-box'), panel: 'action', title: 'EVIDENCE',
+    key: 'Click the lines that matter. A finding can unlock a fourth response option — often the strongest move in the phase, and there is no other way to get it.',
+    body: 'Click a line, or use ↑ ↓ and Enter, to tag it as a finding. Findings also earn evidence points and strengthen your report, and some change what happens later. Tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters. You can tag before or after starting the clock.' },
+  { el: () => STATE.incident && STATE.incident.clock ? ($('start-clock-btn') || $('live-strip')) : null, panel: 'action', title: 'DECISION CLOCK',
+    body: () => STATE.clockMode === 'turn'
+      ? 'You are playing turn-based, so there is no clock: take as long as you like. Real-time mode, in the ↺ menu, has the attacker keep moving while you decide.'
+      : 'Reading is free: each phase opens with the clock stopped. Starting it shows your response options, and from then on the attacker keeps moving — this strip shows what is getting worse. Deciding over par costs response time. Turn-based mode, in the ↺ menu, has no clock.' },
+  { el: () => { const c = $('choices-container'); if (c && c.children.length) return c; const o = $('outcome-area'); return o && o.children.length ? o : null; },
+    panel: 'action', title: 'RESPONSE OPTIONS',
+    body: () => STATE.awaitingContinue
+      ? 'The outcome of your decision: what happened, and what it scored. Proceed when you are ready — the consequences may follow you into later phases.'
+      : 'Three options each phase, sometimes a fourth unlocked by a finding you tagged. Choose with A–D, 1–4, or a click. There is no undo.' },
+  { el: () => $('siem-feed-col'), panel: 'siem', title: 'SIEM FEED',
+    body: 'Events as they happen, stamped on the incident\'s clock: each phase\'s alerts, what the attacker does while your clock runs, and the result of every decision. Click the panel to widen it.' },
+  { el: () => $('notes-col'), panel: 'siem', title: 'ANALYST NOTES',
+    key: 'Every evidence line you tag lands here as a finding. When one unlocks a response option, this log says so, and the new option appears marked ◆ UNLOCKED BY YOUR FINDING.',
+    body: 'It also records false leads and each action you take. Findings carry forward: one tagged in an early phase can unlock an option several phases later. Hover a note to remove it — that only tidies the log; the finding stays tagged and scored.' },
+];
+let helpSteps = [], helpIdx = 0, helpReturnFocus = null, helpTab = null;
+
+function helpMobile() { return getComputedStyle($('mobile-tabs')).display !== 'none'; }
+function helpShowPanel(panel) {
+  if (!panel || !helpMobile()) return;
+  const btn = document.querySelector(`#mobile-tabs button[data-panel="${panel}"]`);
+  if (btn && !btn.classList.contains('active')) btn.click();
+}
+// The part of an element actually on screen: clipped by every scrolling or clipping ancestor
+function helpRect(el) {
+  const r = el.getBoundingClientRect();
+  let { top, left, right, bottom } = r;
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const cs = getComputedStyle(p);
+    if (!/(auto|scroll|hidden)/.test(cs.overflowX + cs.overflowY)) continue;
+    const pr = p.getBoundingClientRect();
+    top = Math.max(top, pr.top); bottom = Math.min(bottom, pr.bottom);
+    left = Math.max(left, pr.left); right = Math.min(right, pr.right);
+  }
+  const pad = 4;
+  top = Math.max(top, 0) - pad; left = Math.max(left, 0) - pad;
+  right = Math.min(right, innerWidth) + pad; bottom = Math.min(bottom, innerHeight) + pad;
+  return { top, left, right, bottom, width: right - left, height: bottom - top };
+}
+function setSpot(r) {
+  Object.assign($('help-spot').style, { top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
+}
+// Put the callout beside the target, never over it if any side has room (narrowing
+// it to fit beside a large area), with its arrow aimed at the target's centre
+const HELP_POP_W = 340, HELP_POP_MIN_W = 240;
+function placeHelpPop(r) {
+  const pop = $('help-pop'), arrow = $('help-arrow');
+  const vw = innerWidth, vh = innerHeight, gap = 14, m = 8;
+  const room = { right: vw - r.right - gap - m, left: r.left - gap - m, bottom: vh - r.bottom - gap - m, top: r.top - gap - m };
+  let side = null;
+  for (const s of ['right', 'left', 'bottom', 'top']) {
+    if (s === 'right' || s === 'left') {
+      const w = Math.min(HELP_POP_W, room[s]);
+      if (w < HELP_POP_MIN_W) continue;
+      pop.style.width = w + 'px';
+      if (pop.offsetHeight <= vh - 2 * m) { side = s; break; }
+    } else {
+      pop.style.width = '';
+      if (pop.offsetHeight <= room[s]) { side = s; break; }
+    }
+  }
+  if (!side) { // nothing fits cleanly: the side with the most room, overlapping
+    pop.style.width = '';
+    side = Object.keys(room).sort((a, b) => room[b] - room[a])[0];
+  }
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let top, left;
+  if (side === 'right' || side === 'left') {
+    left = side === 'right' ? r.right + gap : r.left - gap - pw;
+    top = clamp(cy - ph / 2, m, vh - ph - m);
+    arrow.style.top = clamp(cy - top - 6, 12, ph - 24) + 'px'; arrow.style.left = side === 'right' ? '-7px' : '';
+  } else {
+    top = side === 'bottom' ? r.bottom + gap : r.top - gap - ph;
+    left = clamp(cx - pw / 2, m, vw - pw - m);
+    arrow.style.left = clamp(cx - left - 6, 12, pw - 24) + 'px'; arrow.style.top = side === 'bottom' ? '-7px' : '';
+  }
+  pop.style.left = clamp(left, m, vw - pw - m) + 'px';
+  pop.style.top = clamp(top, m, vh - ph - m) + 'px';
+  pop.dataset.side = side;
+}
+function showHelpStep(i) {
+  helpIdx = i;
+  const step = helpSteps[i];
+  helpShowPanel(step.panel);
+  const el = step.el();
+  if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  $('help-count').textContent = `HELP · ${i + 1} OF ${helpSteps.length}`;
+  $('help-title').textContent = step.title;
+  $('help-key').textContent = step.key || '';
+  $('help-body').textContent = resolve(step.body);
+  $('help-prev').disabled = i === 0;
+  $('help-next').textContent = i === helpSteps.length - 1 ? 'DONE' : 'NEXT ▸';
+  const r = helpRect(el);
+  setSpot(r);
+  placeHelpPop(r);
+}
+function openHelp() {
+  if (!STATE.started || !$('game-screen').classList.contains('visible') || $('end-screen').classList.contains('visible')) return;
+  // Only the steps whose area exists right now (no carried box, no options yet, ...)
+  helpSteps = HELP_STEPS.filter(s => s.el());
+  if (!helpSteps.length) return;
+  helpReturnFocus = document.activeElement;
+  helpTab = helpMobile() ? (document.querySelector('#mobile-tabs button.active') || {}).dataset?.panel : null;
+  $('main').classList.remove('siem-expanded');
+  const overlay = $('help-overlay'), spot = $('help-spot');
+  overlay.hidden = false;
+  // Dim first: the spotlight starts as a point at the first area's centre, then opens onto it
+  helpShowPanel(helpSteps[0].panel);
+  const r = helpRect(helpSteps[0].el());
+  spot.classList.add('instant');
+  setSpot({ top: r.top + r.height / 2, left: r.left + r.width / 2, width: 0, height: 0 });
+  $('help-pop').classList.add('hidden');
+  void spot.offsetWidth;
+  spot.classList.remove('instant');
+  overlay.classList.add('open');
+  setTimeout(() => {
+    if (overlay.hidden) return;
+    showHelpStep(0);
+    $('help-pop').classList.remove('hidden');
+    $('help-next').focus({ preventScroll: true });
+  }, 220);
+}
+function closeHelp() {
+  const overlay = $('help-overlay');
+  if (overlay.hidden) return;
+  overlay.classList.remove('open');
+  overlay.hidden = true;
+  if (helpTab) helpShowPanel(helpTab);
+  lastTick = performance.now(); // the tour's time is not decision time
+  if (helpReturnFocus && document.contains(helpReturnFocus)) helpReturnFocus.focus({ preventScroll: true });
+}
+function helpStep(delta) {
+  const i = helpIdx + delta;
+  if (i < 0) return;
+  if (i >= helpSteps.length) { closeHelp(); return; }
+  showHelpStep(i);
+}
+$('help-btn').addEventListener('click', (e) => { e.stopPropagation(); openHelp(); });
+$('help-prev').addEventListener('click', () => helpStep(-1));
+$('help-next').addEventListener('click', () => helpStep(1));
+$('help-exit').addEventListener('click', closeHelp);
+$('help-overlay').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); closeHelp(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); helpStep(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); helpStep(-1); }
+  else if (e.key === 'Tab') {
+    const f = [...$('help-pop').querySelectorAll('button')].filter(b => !b.disabled);
+    const i = f.indexOf(document.activeElement);
+    e.preventDefault();
+    f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+  }
+});
+window.addEventListener('resize', () => { if (!$('help-overlay').hidden) showHelpStep(helpIdx); });
+
 // ── MOBILE TAB SWITCHING ─────────────────────────
 document.querySelectorAll('#mobile-tabs button').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1024,7 +1221,11 @@ function openMenu() {
   $('menu-warning').textContent = incidentInProgress()
     ? `${inc.ticketId} is still open (phase ${STATE.phaseIdx + 1} of ${PHASE_NAMES.length}). Starting another incident abandons it — progress is lost.`
     : '';
-  $('menu-replay').textContent = `↺ REPLAY ${inc.ticketId}`;
+  // Before the first incident there is nothing to replay or go back to
+  $('menu-replay').hidden = !inc;
+  $('menu-close-btn').hidden = !inc;
+  if (inc) $('menu-replay').textContent = `↺ REPLAY ${inc.ticketId}`;
+  disarmReset();
   const bests = loadBests();
   $('scenario-list').innerHTML = INCIDENTS.map((i, idx) => `
     <button class="scenario-row${i === inc ? ' current' : ''}" data-idx="${idx}">
@@ -1036,13 +1237,56 @@ function openMenu() {
   $('clock-realtime').setAttribute('aria-pressed', String(STATE.clockMode === 'realtime'));
   $('clock-turn').setAttribute('aria-pressed', String(STATE.clockMode === 'turn'));
   $('menu-modal').classList.add('visible');
-  $('menu-close-btn').focus({ preventScroll: true });
+  // With nothing loaded, focus the dialog rather than a button: the key that dismissed
+  // the boot screen would otherwise land on it and start an incident
+  (inc ? $('menu-close-btn') : $('menu-modal-inner')).focus({ preventScroll: true });
   $('menu-modal-inner').scrollTop = 0; // on phones the list scrolls; keep the warning in view
 }
 function closeMenu() {
+  if (!STATE.incident) return; // nothing behind the menu yet: pick an incident
   $('menu-modal').classList.remove('visible');
+  disarmReset();
   if (menuReturnFocus && document.contains(menuReturnFocus)) menuReturnFocus.focus();
 }
+
+// ── DELETE GAME DATA ───────────────────────────────
+// Everything this game keeps in the browser (personal bests, clock setting) is
+// under 'pumaresponse.'. Deleting takes two presses: the first arms the button
+// for a few seconds. An incident in progress is abandoned and the menu starts fresh.
+let resetTimer = null;
+function disarmReset() {
+  clearTimeout(resetTimer);
+  $('menu-reset').classList.remove('armed');
+  $('menu-reset').textContent = 'RESET PROGRESS';
+  $('menu-reset-note').textContent = '';
+}
+function resetAllData() {
+  for (const store of [localStorage, sessionStorage]) {
+    try { Object.keys(store).filter(k => k.startsWith('pumaresponse.')).forEach(k => store.removeItem(k)); } catch (e) {}
+  }
+  STATE.siemTimers.forEach(clearTimeout);
+  STATE.siemTimers = [];
+  STATE.played.clear();
+  STATE.clockMode = 'realtime';
+  STATE.started = false;
+  STATE.incident = null;
+  $('game-screen').classList.remove('visible');
+  $('end-screen').classList.remove('visible');
+  openMenu();
+  $('menu-warning').textContent = 'Progress reset: personal bests and settings deleted from this browser.';
+}
+$('menu-reset').addEventListener('click', () => {
+  const btn = $('menu-reset');
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed');
+    btn.textContent = 'PRESS AGAIN TO RESET';
+    $('menu-reset-note').textContent = 'This deletes your personal bests and clock setting, and abandons any incident in progress. It can\'t be undone.';
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(disarmReset, 6000);
+    return;
+  }
+  resetAllData();
+});
 function restartWith(incident) {
   $('menu-modal').classList.remove('visible');
   startGame(incident);
@@ -1066,7 +1310,7 @@ $('menu-modal').addEventListener('click', (e) => {
 $('menu-modal').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closeMenu(); return; }
   if (e.key === 'Tab') {
-    const focusable = $('menu-modal-inner').querySelectorAll('button');
+    const focusable = $('menu-modal-inner').querySelectorAll('button:not([hidden])');
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }

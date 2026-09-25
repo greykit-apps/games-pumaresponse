@@ -25,7 +25,7 @@
     <div class="logo-sub">MANAGED SECURITY SERVICES  //  INCIDENT RESPONSE PLATFORM v1.0.0</div>
   </div>
   <div id="boot-log"></div>
-  <div id="boot-prompt" style="display:none">▋ PRESS ANY KEY TO BEGIN SHIFT</div>
+  <div id="boot-prompt" style="display:none">▋ PRESS ANY KEY TO CONTINUE</div>
   <div id="boot-skip-hint">TAP TO SKIP</div>
 </div>
 
@@ -38,8 +38,9 @@
     <div class="header-stat">ELAPSED: <span id="hdr-elapsed">00:00</span></div>
     <div class="header-spacer"></div>
     <div id="phase-indicator" aria-live="polite">INITIALIZING...</div>
+    <button id="help-btn" title="Help — a tour of this screen" aria-label="Help: a tour of this screen" aria-haspopup="dialog">HELP</button>
     <button id="menu-btn" title="Restart or change incident" aria-label="Restart or change incident" aria-haspopup="dialog">↺</button>
-    <button id="about-btn" title="About PumaResponse" aria-label="About PumaResponse">?</button>
+    <button id="about-btn" title="About PumaResponse" aria-label="About PumaResponse">i</button>
   </header>
   <div id="phase-progress-bar" role="progressbar" aria-label="Phase progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="phase-progress-fill"></div></div>
 
@@ -103,7 +104,7 @@
 
 <!-- INCIDENT MENU -->
 <div id="menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-title">
-  <div id="menu-modal-inner">
+  <div id="menu-modal-inner" tabindex="-1">
     <h2 id="menu-title">// INCIDENT CONTROL</h2>
     <p id="menu-warning" class="menu-warning"></p>
     <div class="menu-actions">
@@ -118,7 +119,30 @@
     <p class="menu-note">Real-time: each phase opens with the clock stopped so you can read. Starting the clock shows your options, and the attacker keeps moving until you decide. Turn-based: no clock.</p>
     <div class="menu-section">CHOOSE A SCENARIO</div>
     <div id="scenario-list"></div>
+    <div class="menu-section">GAME DATA</div>
+    <p class="menu-note">Personal bests and your clock setting are kept in this browser only.</p>
+    <div class="menu-actions">
+      <button class="menu-action menu-reset" id="menu-reset">RESET PROGRESS</button>
+    </div>
+    <p class="menu-note menu-reset-note" id="menu-reset-note" aria-live="polite"></p>
     <button id="menu-close-btn">[CANCEL]</button>
+  </div>
+</div>
+
+<!-- HELP TOUR: dims the screen and lights up one area at a time -->
+<div id="help-overlay" hidden>
+  <div id="help-spot" aria-hidden="true"></div>
+  <div id="help-pop" role="dialog" aria-modal="true" aria-labelledby="help-title" aria-describedby="help-key help-body">
+    <div id="help-arrow" aria-hidden="true"></div>
+    <div id="help-count"></div>
+    <h2 id="help-title"></h2>
+    <p id="help-key"></p>
+    <p id="help-body"></p>
+    <div class="help-nav">
+      <button id="help-prev">◂ PREV</button>
+      <button id="help-next">NEXT ▸</button>
+      <button id="help-exit">EXIT</button>
+    </div>
   </div>
 </div>
 

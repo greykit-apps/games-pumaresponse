@@ -291,6 +291,93 @@ body::after {
   flex-shrink: 0;
 }
 #menu-btn:hover { background: var(--green); color: var(--bg); text-shadow: none; }
+#help-btn {
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--green-dim);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--green);
+  font-family: var(--font);
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+#help-btn:hover { background: var(--green); color: var(--bg); }
+
+/* ===================== HELP TOUR ===================== */
+/* The overlay only catches clicks; the dimming is the spotlight's own shadow,
+   so everything but the lit area is dark */
+#help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-overlay) + 10);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+#help-overlay[hidden] { display: none; }
+#help-overlay.open { opacity: 1; }
+#help-spot {
+  position: fixed;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--green), 0 0 18px var(--green-glow-lg), 0 0 0 200vmax rgba(0,0,0,0.8);
+  pointer-events: none;
+  transition: top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
+#help-spot.instant { transition: none; }
+#help-pop {
+  position: fixed;
+  width: min(340px, calc(100vw - 16px));
+  background: var(--bg);
+  border: 1px solid var(--green);
+  box-shadow: 0 0 20px var(--green-glow);
+  padding: 14px 16px 12px;
+  color: var(--green);
+  transition: top 0.3s ease, left 0.3s ease, opacity 0.2s ease;
+}
+#help-pop.hidden { opacity: 0; }
+#help-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--bg);
+  border: 1px solid transparent;
+  transform: rotate(45deg);
+}
+#help-pop[data-side="right"] #help-arrow { left: -7px; border-left-color: var(--green); border-bottom-color: var(--green); }
+#help-pop[data-side="left"] #help-arrow { right: -7px; border-top-color: var(--green); border-right-color: var(--green); }
+#help-pop[data-side="bottom"] #help-arrow { top: -7px; border-top-color: var(--green); border-left-color: var(--green); }
+#help-pop[data-side="top"] #help-arrow { bottom: -7px; border-bottom-color: var(--green); border-right-color: var(--green); }
+#help-count { font-size: 11px; color: var(--green-dim); letter-spacing: 1px; margin-bottom: 4px; }
+#help-title { font-size: 15px; letter-spacing: 2px; color: var(--green); text-shadow: 0 0 6px var(--green-glow-lg); margin-bottom: 8px; }
+#help-key {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--amber);
+  border-left: 2px solid var(--amber);
+  background: var(--amber-bg-dim);
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+#help-key:empty { display: none; }
+#help-body { font-size: 13px; line-height: 1.55; color: var(--green); margin-bottom: 12px; }
+.help-nav { display: flex; gap: 6px; }
+.help-nav button {
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid var(--green-dim);
+  background: transparent;
+  color: var(--green);
+  font: 12px var(--font);
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.help-nav button:hover:not(:disabled) { background: var(--green); color: var(--bg); }
+.help-nav button:disabled { opacity: 0.35; cursor: default; }
+#help-exit { flex: 0 0 auto; border-color: var(--amber); color: var(--amber); }
+#help-exit:hover { background: var(--amber) !important; color: var(--bg) !important; }
 #menu-modal-inner { max-height: calc(100vh - 40px); overflow-y: auto; }
 .menu-warning {
   border: 1px dashed var(--red-dim);
@@ -624,6 +711,13 @@ body::after {
 .menu-note { font-size: 12px; color: var(--green-dim); line-height: 1.5; margin: -8px 0 16px; }
 .menu-action[aria-pressed="true"] { background: var(--green-bg-dim); border-color: var(--green); }
 .menu-action[aria-pressed="true"]::before { content: '◆ '; }
+.menu-action[hidden], #menu-close-btn[hidden] { display: none; }
+#menu-modal-inner:focus { outline: none; }
+.menu-reset { flex: 0 1 auto; color: var(--red-dim); border-color: var(--red-dim); font-size: 12px; }
+.menu-reset:hover { color: var(--red); border-color: var(--red); background: var(--red-bg-dim); }
+.menu-reset.armed { color: var(--bg); background: var(--red); border-color: var(--red); }
+.menu-reset-note { color: var(--red); margin-top: -8px; }
+.menu-reset-note:empty { display: none; }
 .choice-btn .unlock-tag { display: block; font-size: 10px; letter-spacing: 1px; color: var(--green); padding-left: 24px; margin-top: 2px; }
 
 /* Choice buttons */
@@ -802,6 +896,33 @@ body::after {
   line-height: 1.4;
 }
 .note-entry .note-phase { color: var(--amber); font-size: 11px; }
+.note-entry { position: relative; }
+/* Revealed on hover or keyboard focus; drawn over the end of the line so
+   nothing reflows when it appears */
+.note-remove {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  padding: 1px 5px 1px 14px;
+  font: 10px var(--font);
+  letter-spacing: 0.5px;
+  color: var(--red);
+  background: linear-gradient(to right, transparent, var(--bg) 10px);
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+.note-entry:hover .note-remove,
+.note-remove:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.note-remove:hover { text-decoration: underline; text-shadow: 0 0 4px var(--red); }
+/* No hover on touch screens: keep it visible */
+@media (hover: none) {
+  .note-remove { opacity: 1; pointer-events: auto; }
+}
 
 /* ===================== RIGHT PANEL: SIEM & NOTES ===================== */
 #right-panel { border-right: none; border-left: 1px solid var(--border); }
