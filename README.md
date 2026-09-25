@@ -93,15 +93,15 @@ Each decision is rated as **optimal**, **acceptable**, or **poor** across four m
 | Evidence Preservation | Whether you maintained forensic integrity |
 | Thoroughness | Completeness of your response at each phase |
 
-Your final grade reflects professional incident response standards:
+Your score is graded as a percentage of the best score achievable in that scenario, so a grade means the same thing in every incident. In practice, an A needs the right calls *and* the evidence documented; making every right call without reading the logs lands a B.
 
-| Grade | Score | Verdict |
+| Grade | % of best possible | Verdict |
 |-------|-------|---------|
-| **A** | 80%+ | INCIDENT RESOLVED — Outstanding response |
-| **B** | 60-79% | INCIDENT RESOLVED — Solid response |
-| **C** | 40-59% | INCIDENT CONTAINED — Contained with gaps |
-| **D** | 20-39% | INCIDENT CONTAINED (BARELY) — Significant gaps |
-| **F** | <20% | RESPONSE FAILURE — Critical errors throughout |
+| **A** | 85%+ | INCIDENT RESOLVED — Outstanding response |
+| **B** | 65-84% | INCIDENT RESOLVED — Solid response |
+| **C** | 45-64% | INCIDENT CONTAINED — Contained with gaps |
+| **D** | 25-44% | INCIDENT CONTAINED (BARELY) — Significant gaps |
+| **F** | <25% | RESPONSE FAILURE — Critical errors throughout |
 
 ## Educational Value
 
@@ -124,6 +124,8 @@ The simulator teaches real-world incident response trade-offs grounded in NIST/S
 ```
 pumaresponse/
 ├── index.html          # Single-file application
+├── tools/
+│   └── scenario-harness.js   # Dev tool: walks every decision path, checks invariants, calibrates grades
 ├── screenshots/        # Game screenshots
 │   ├── boot.png
 │   ├── triage.png
@@ -132,6 +134,20 @@ pumaresponse/
 │   └── endscreen.png
 └── README.md
 ```
+
+## Development
+
+Each scenario is a data object in `index.html`'s `INCIDENTS` array. Any field can be a plain value or a function of the run's state, which is how later phases react to earlier choices. The mechanics are documented where they're implemented — search for `EVIDENCE TAGGING` and `DECISION CLOCK`.
+
+After changing a scenario, check it with the harness. Serve the repo (`python3 -m http.server 8000`), open the game, and in the browser console:
+
+```js
+await import('/tools/scenario-harness.js?' + Date.now())
+harness('BEC')     // walks the decision tree under six play styles; badCount must be 0
+calibrate('BEC')   // if it reports drift, update that scenario's bestScore
+```
+
+Run one scenario per call and reload between runs.
 
 ## License
 

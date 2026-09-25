@@ -1671,6 +1671,10 @@ const INCIDENTS = [
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
+    // Best achievable total (every finding tagged, instant decisions, best path).
+    // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
+    // changing this scenario's scores, carried penalties or findings.
+    bestScore: 333,
     debrief: f => {
       const foot = rwFoothold(f);
       return [
@@ -2388,6 +2392,10 @@ ${f.backupLoss ? `  - Local Veeam repository: <span class="log-highlight">DESTRO
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
+    // Best achievable total (every finding tagged, instant decisions, best path).
+    // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
+    // changing this scenario's scores, carried penalties or findings.
+    bestScore: 334,
     debrief: f => {
       const vendorLoss = f.vendorFraud ? 87000 : 0;
       return [
@@ -2971,6 +2979,10 @@ ${f.mfaBackdoor ? `
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
+    // Best achievable total (every finding tagged, instant decisions, best path).
+    // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
+    // changing this scenario's scores, carried penalties or findings.
+    bestScore: 343,
     debrief: f => [
       ['Endpoints Compromised', `342 took the trojanized update · ${f.hostsStaged} carried second-stage tooling`
         + (f.reinfected > 0 ? ` · ${f.reinfected} reinfected` : '') + (f.ransomware ? ' · 64 encrypted' : '')],
@@ -3718,6 +3730,10 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
+    // Best achievable total (every finding tagged, instant decisions, best path).
+    // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
+    // changing this scenario's scores, carried penalties or findings.
+    bestScore: 357,
     debrief: f => [
       ['ITAR Files Exfiltrated', `${insiderNum(f.itarFiles)} (${insiderNum(f.itarFiles - INSIDER_ITAR_AT_HANDOFF)} after the MSSP took the case)`],
       ['Subject Tipped Off', f.alertedAt ? `Yes — during ${f.alertedAt}` : 'Not until the termination meeting'],
@@ -4544,6 +4560,10 @@ ${f.agentUninstalled ? '  - NetPulse agent removed from all endpoints — no upd
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
+    // Best achievable total (every finding tagged, instant decisions, best path).
+    // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
+    // changing this scenario's scores, carried penalties or findings.
+    bestScore: 331,
     debrief: (f, st) => {
       const persist = cbFootholds(f, true);
       return [
@@ -5351,6 +5371,10 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
+    // Best achievable total (every finding tagged, instant decisions, best path).
+    // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
+    // changing this scenario's scores, carried penalties or findings.
+    bestScore: 338,
     debrief: f => [
       ['Cards Stolen', ddosN(ddosCards(f))],
       ['Stores Affected', `${ddosStores(f)} of 52 (${ddosTerminals(f)} terminals)`],
@@ -6037,6 +6061,10 @@ ${f.snapShared ? `  <span class="log-highlight">rds:ModifyDBSnapshotAttribute ${
     },
     // 2 real seconds per game minute once the decision clock starts; 10-minute par
     clock: { rate: 0.5, par: 10 },
+    // Best achievable total (every finding tagged, instant decisions, best path).
+    // Grades are a percentage of this. Recompute with tools/scenario-harness.js after
+    // changing this scenario's scores, carried penalties or findings.
+    bestScore: 370,
     debrief: f => {
       const n = wrcFolders(f.exfilMin);
       const present = wrcPresent(f);
@@ -7262,25 +7290,28 @@ function advancePhase() {
 }
 
 // ── END GAME ───────────────────────────────────────
+const GRADE_BANDS = { A: 85, B: 65, C: 45, D: 25 }; // % of the scenario's bestScore
 function endGame() {
   $('game-screen').classList.remove('visible');
 
   const s = STATE.scores;
   const total = s.time + s.containment + s.evidence + s.thoroughness;
-  const maxPossible = 6 * (25 + 25 + 25 + 25); // rough max if all "good"
-  const pct = Math.round((total / 300) * 100); // normalized to 300 as practical max
+  // Graded against this scenario's best achievable score, so a grade means the same
+  // thing in every scenario. With these bands: A needs the right calls AND the
+  // evidence documented; the right calls alone land a B; random play lands D/F.
+  const pct = Math.round((total / (STATE.incident.bestScore || 300)) * 100);
 
   let grade, gradeClass, titleText, titleClass, subtitle;
-  if (pct >= 80) {
+  if (pct >= GRADE_BANDS.A) {
     grade = 'A'; gradeClass = 'green'; titleText = 'INCIDENT RESOLVED'; titleClass = 'success';
     subtitle = 'Outstanding response. Your methodical approach minimized damage, preserved evidence, and set the client up for long-term improvement. The MSSP is proud to have you on the team.';
-  } else if (pct >= 60) {
+  } else if (pct >= GRADE_BANDS.B) {
     grade = 'B'; gradeClass = 'green'; titleText = 'INCIDENT RESOLVED'; titleClass = 'success';
     subtitle = 'Solid response overall. You contained the threat and recovered operations, though some opportunities for improvement were missed. Good work, analyst.';
-  } else if (pct >= 40) {
+  } else if (pct >= GRADE_BANDS.C) {
     grade = 'C'; gradeClass = 'amber'; titleText = 'INCIDENT CONTAINED'; titleClass = 'partial';
     subtitle = 'The incident was eventually contained, but delays and missed steps increased the blast radius. Review your approach and consider what could be done differently next time.';
-  } else if (pct >= 20) {
+  } else if (pct >= GRADE_BANDS.D) {
     grade = 'D'; gradeClass = 'amber'; titleText = 'INCIDENT CONTAINED — BARELY'; titleClass = 'partial';
     subtitle = 'Significant gaps in your response led to unnecessary damage, lost evidence, and client dissatisfaction. A post-mortem on your own process is recommended.';
   } else {
@@ -7322,7 +7353,7 @@ function endGame() {
       <div class="sc-grade ${gradeClass}">${grade}</div>
       <div>
         <div class="sc-grade-label">OVERALL GRADE</div>
-        <div style="font-size:12px;color:var(--green-dim);">${total} points</div>
+        <div style="font-size:12px;color:var(--green-dim);">${total} points · ${pct}% of best possible</div>
       </div>
     </div>
   `;
