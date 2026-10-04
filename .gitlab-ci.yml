@@ -46,6 +46,11 @@ deploy:
           sleep 200
         done
       }
+  # ONE destination, deliberately. This job used to also rsync to
+  # ~/pumaresponse.greykit.com/, but the app no longer lives at that hostname --
+  # it has no DNS record, so nothing was ever served from that copy. Since the
+  # port-22 rate limit above is counted per connection, a second rsync doubled
+  # this repo's contribution to it for no benefit. Do not add a destination back
+  # without a hostname that actually resolves to it.
   script:
-    - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/pumaresponse.greykit.com/
     - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/greykit.com/games/pumaresponse/
