@@ -709,6 +709,10 @@ body::after {
 .outcome-clock { font-size: 11px; letter-spacing: 1px; color: var(--green-dim); margin-top: 4px; }
 .outcome-clock .neg { color: var(--red); }
 .menu-note { font-size: 12px; color: var(--green-dim); line-height: 1.5; margin: -8px 0 16px; }
+/* greykit.games canon §1 — the credit */
+.gk-credit { text-align: center; }
+.gk-credit a { color: var(--amber); text-decoration: none; border-bottom: 1px solid var(--amber-dim); }
+#menu-modal-inner .gk-credit { font-size: 12px; color: var(--green-dim); letter-spacing: 1px; margin-top: 16px; }
 .menu-action[aria-pressed="true"] { background: var(--green-bg-dim); border-color: var(--green); }
 .menu-action[aria-pressed="true"]::before { content: '◆ '; }
 .menu-action[hidden], #menu-close-btn[hidden] { display: none; }
