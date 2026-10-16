@@ -53,4 +53,7 @@ deploy:
   # this repo's contribution to it for no benefit. Do not add a destination back
   # without a hostname that actually resolves to it.
   script:
-    - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/greykit.com/games/pumaresponse/
+    # PRODUCT.md, DESIGN.md, .impeccable/ and .impeccable.md are design notes
+    # the impeccable skill writes into the repo root (games-meta STANDARD.md
+    # §12). They stay in the repo and off the live site.
+    - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='PRODUCT.md' --exclude='DESIGN.md' --exclude='.impeccable' --exclude='.impeccable.md' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/greykit.com/games/pumaresponse/
