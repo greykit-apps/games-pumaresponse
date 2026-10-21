@@ -4,69 +4,12 @@
 
 const $ = id => document.getElementById(id);
 
-// ── BOOT SEQUENCE ──────────────────────────────────
-const BOOT_LINES = [
-  ['Initializing PumaResponse MSSP Platform...', 'ok', '[ OK ]'],
-  ['Loading SIEM connectors...', 'ok', '[ OK ]'],
-  ['Connecting to Sentinel / Splunk / Elastic...', 'ok', '[ OK ]'],
-  ['Loading threat intelligence feeds...', 'ok', '[ OK ]'],
-  ['Syncing MITRE ATT&CK framework v19.2...', 'ok', '[ OK ]'],
-  ['Loading incident playbooks...', 'ok', '[ OK ]'],
-  ['Checking analyst certifications...', 'warn', '[ WARN ]'],
-  ['Establishing customer VPN tunnels...', 'ok', '[ OK ]'],
-  ['Pulling EDR telemetry...', 'ok', '[ OK ]'],
-  ['Loading forensic toolkit...', 'ok', '[ OK ]'],
-  ['Verifying chain-of-custody protocols...', 'ok', '[ OK ]'],
-  ['MSSP shift handoff received — 1 incident in queue', 'warn', '[ ALERT ]'],
-];
-
-let bootIdx = 0;
-function runBoot() {
-  if (bootIdx < BOOT_LINES.length) {
-    const [text, cls, tag] = BOOT_LINES[bootIdx];
-    const div = document.createElement('div');
-    div.className = 'boot-line';
-    div.innerHTML = `<span class="label">${escapeHtml(text)}</span><span class="${cls}">${escapeHtml(tag)}</span>`;
-    $('boot-log').appendChild(div);
-    bootIdx++;
-    setTimeout(runBoot, 120 + Math.random() * 180);
-  } else {
-    $('boot-prompt').style.display = 'block';
-  }
-}
-
-function skipBoot() {
-  // Render remaining boot lines instantly
-  while (bootIdx < BOOT_LINES.length) {
-    const [text, cls, tag] = BOOT_LINES[bootIdx];
-    const div = document.createElement('div');
-    div.className = 'boot-line';
-    div.style.animationDuration = '0s';
-    div.innerHTML = `<span class="label">${escapeHtml(text)}</span><span class="${cls}">${escapeHtml(tag)}</span>`;
-    $('boot-log').appendChild(div);
-    bootIdx++;
-  }
-  $('boot-prompt').style.display = 'block';
-}
-
-let bootDone = false;
-document.addEventListener('keydown', function bootKey(e) {
-  if (bootIdx < BOOT_LINES.length) { skipBoot(); return; }
-  if (bootDone) return;
-  bootDone = true;
-  document.removeEventListener('keydown', bootKey);
-  $('boot-screen').style.display = 'none';
-  openMenu(); // pick an incident; nothing starts until you do
-});
-$('boot-screen').addEventListener('click', function() {
-  if (bootIdx < BOOT_LINES.length) { skipBoot(); return; }
-  if (bootDone) return;
-  bootDone = true;
-  $('boot-screen').style.display = 'none';
-  openMenu();
-});
-
-setTimeout(runBoot, 400);
+// ── THE TITLE'S FLAGS ──────────────────────────────
+// js/title.js opens the game: canon's boot, then the terminal title over an
+// incident worked on autopilot. These say whether that is what is on screen.
+let titleOpen = false;  // the title is up
+let _autopilot = false; // the incident on screen is the autopilot's: never graded or recorded
+let _backdrop = false;  // ...and it is behind the title, where keys and focus are the title's
 
 // ── INCIDENT SCENARIOS ─────────────────────────────
 // Scenarios register themselves from js/scenarios/*.js (loaded after this file,
@@ -519,6 +462,7 @@ function startClock() {
   renderChoices();
   if (clockActive()) addSiemEntry(clockStamp(), 'info', `${STATE.incident.phases[STATE.phaseIdx].name}: decision clock started`);
   updateClockUI();
+  if (_backdrop) return; // behind the title: focus and scrolling stay the title's
   const first = document.querySelector('.choice-btn');
   if (first) first.focus({ preventScroll: true });
   $('choices-title').scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -535,8 +479,6 @@ setInterval(() => {
 function setClockMode(mode) {
   STATE.clockMode = mode;
   try { localStorage.setItem('pumaresponse.clock', mode); } catch (e) {}
-  $('clock-realtime').setAttribute('aria-pressed', String(mode === 'realtime'));
-  $('clock-turn').setAttribute('aria-pressed', String(mode === 'turn'));
   // Switching to turn-based mid-read shouldn't leave the options locked behind the gate
   if (mode === 'turn' && STATE.started && !STATE.clockStarted && $('start-clock-btn')) startClock();
   updateClockUI();
@@ -722,7 +664,7 @@ function selectChoice(idx) {
   updateClockUI();
 
   // Scroll to outcome
-  outcomeArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (!_backdrop) outcomeArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ── PHASE ADVANCEMENT ──────────────────────────────
@@ -753,6 +695,7 @@ function recordBest(id, grade, pct) {
   return isNew;
 }
 function endGame() {
+  if (_autopilot) { backdropAgain(); return; } // not the player's: no debrief, no best
   $('game-screen').classList.remove('visible');
 
   const s = STATE.scores;
@@ -875,7 +818,7 @@ function endGame() {
 
 // ── KEYBOARD CONTROLS ──────────────────────────────
 document.addEventListener('keydown', (e) => {
-  if (!STATE.started) return;
+  if (!STATE.started || _autopilot) return;
   if ($('menu-modal').classList.contains('visible') || $('about-modal').classList.contains('visible')) return;
   if (!$('help-overlay').hidden) return; // the tour has its own keys
 
@@ -924,7 +867,7 @@ function pickIncident() {
 
 // An incident is "in progress" once it has started and the end screen isn't up
 function incidentInProgress() {
-  return STATE.started && !$('end-screen').classList.contains('visible');
+  return STATE.started && !_autopilot && !$('end-screen').classList.contains('visible');
 }
 
 function startGame(incident) {
@@ -1233,15 +1176,15 @@ document.querySelectorAll('#mobile-tabs button').forEach(btn => {
 let menuReturnFocus = null;
 function openMenu() {
   menuReturnFocus = document.activeElement;
-  const inc = STATE.incident;
+  const inc = _autopilot ? null : STATE.incident;
   $('menu-warning').textContent = incidentInProgress()
     ? `${inc.ticketId} is still open (phase ${STATE.phaseIdx + 1} of ${PHASE_NAMES.length}). Starting another incident abandons it — progress is lost.`
     : '';
   // Before the first incident there is nothing to replay or go back to
   $('menu-replay').hidden = !inc;
-  $('menu-close-btn').hidden = !inc;
+  $('menu-close-btn').hidden = !inc && !titleOpen;
+  $('menu-main').hidden = titleOpen;
   if (inc) $('menu-replay').textContent = `↺ REPLAY ${inc.ticketId}`;
-  disarmReset();
   const bests = loadBests();
   $('scenario-list').innerHTML = INCIDENTS.map((i, idx) => `
     <button class="scenario-row${i === inc ? ' current' : ''}" data-idx="${idx}">
@@ -1250,8 +1193,6 @@ function openMenu() {
       <span class="sr-client">${escapeHtml(i.client)}</span>
       <span class="sr-played">${[i === inc ? 'CURRENT' : '', bests[i.id] ? `BEST ${bests[i.id].grade} · ${bests[i.id].pct}%` : STATE.played.has(i.id) ? 'PLAYED' : ''].filter(Boolean).join(' · ')}</span>
     </button>`).join('');
-  $('clock-realtime').setAttribute('aria-pressed', String(STATE.clockMode === 'realtime'));
-  $('clock-turn').setAttribute('aria-pressed', String(STATE.clockMode === 'turn'));
   $('menu-modal').classList.add('visible');
   // With nothing loaded, focus the dialog rather than a button: the key that dismissed
   // the boot screen would otherwise land on it and start an incident
@@ -1259,66 +1200,29 @@ function openMenu() {
   $('menu-modal-inner').scrollTop = 0; // on phones the list scrolls; keep the warning in view
 }
 function closeMenu() {
+  if (titleOpen) { $('menu-modal').classList.remove('visible'); focusTitle(); return; }
   if (!STATE.incident) return; // nothing behind the menu yet: pick an incident
   $('menu-modal').classList.remove('visible');
-  disarmReset();
   if (menuReturnFocus && document.contains(menuReturnFocus)) menuReturnFocus.focus();
 }
 
-// ── DELETE GAME DATA ───────────────────────────────
-// Everything this game keeps in the browser (personal bests, clock setting) is
-// under 'pumaresponse.'. Deleting takes two presses: the first arms the button
-// for a few seconds. An incident in progress is abandoned and the menu starts fresh.
-let resetTimer = null;
-function disarmReset() {
-  clearTimeout(resetTimer);
-  $('menu-reset').classList.remove('armed');
-  $('menu-reset').textContent = 'RESET PROGRESS';
-  $('menu-reset-note').textContent = '';
-}
-function resetAllData() {
-  for (const store of [localStorage, sessionStorage]) {
-    try { Object.keys(store).filter(k => k.startsWith('pumaresponse.')).forEach(k => store.removeItem(k)); } catch (e) {}
-  }
-  STATE.siemTimers.forEach(clearTimeout);
-  STATE.siemTimers = [];
-  STATE.played.clear();
-  STATE.clockMode = 'realtime';
-  helpSeenThisPage = false; // the help tour runs again on the next first incident
-  STATE.started = false;
-  STATE.incident = null;
-  $('game-screen').classList.remove('visible');
-  $('end-screen').classList.remove('visible');
-  openMenu();
-  $('menu-warning').textContent = 'Progress reset: personal bests and settings deleted from this browser. The help tour will run again on your next incident.';
-}
-$('menu-reset').addEventListener('click', () => {
-  const btn = $('menu-reset');
-  if (!btn.classList.contains('armed')) {
-    btn.classList.add('armed');
-    btn.textContent = 'PRESS AGAIN TO RESET';
-    $('menu-reset-note').textContent = 'This deletes your personal bests and clock setting, and abandons any incident in progress. It can\'t be undone.';
-    clearTimeout(resetTimer);
-    resetTimer = setTimeout(disarmReset, 6000);
-    return;
-  }
-  resetAllData();
-});
 function restartWith(incident) {
   $('menu-modal').classList.remove('visible');
+  stopBackdrop();
+  closeTitle();
   startGame(incident);
   const first = document.querySelector('.choice-btn');
   if (first) first.focus();
   // First incident ever: let the screen appear, then run the help tour over it
-  if (!helpSeen()) setTimeout(() => { if (!helpSeen()) openHelp(); }, 700);
+  if (!helpSeen()) setTimeout(() => { if (!helpSeen() && !_autopilot && !titleOpen) openHelp(); }, 700);
 }
 
 $('menu-btn').addEventListener('click', (e) => { e.stopPropagation(); openMenu(); });
 $('menu-close-btn').addEventListener('click', closeMenu);
 $('menu-replay').addEventListener('click', () => restartWith(STATE.incident));
 $('menu-random').addEventListener('click', () => restartWith());
-$('clock-realtime').addEventListener('click', () => setClockMode('realtime'));
-$('clock-turn').addEventListener('click', () => setClockMode('turn'));
+$('menu-settings').addEventListener('click', () => { $('menu-modal').classList.remove('visible'); openSettings(); });
+$('menu-main').addEventListener('click', () => toTitle()); // js/title.js, loaded later
 $('scenario-list').addEventListener('click', (e) => {
   const row = e.target.closest('.scenario-row');
   if (row) restartWith(INCIDENTS[+row.dataset.idx]);

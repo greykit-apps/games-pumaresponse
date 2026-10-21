@@ -15,20 +15,8 @@
 </head>
 <body>
 
-<!-- BOOT SCREEN -->
-<div id="boot-screen">
-  <div style="text-align:center; margin-bottom:30px;">
-    <div class="logo-ascii" role="img" aria-label="PumaResponse"> ____  _   _ __  __    _    ____  _____ ____  ____   ___  _   _ ____  _____
-|  _ \| | | |  \/  |  / \  |  _ \| ____/ ___||  _ \ / _ \| \ | / ___|| ____|
-| |_) | | | | |\/| | / _ \ | |_) |  _| \___ \| |_) | | | |  \| \___ \|  _|
-|  __/| |_| | |  | |/ ___ \|  _ &lt;| |___ ___) |  __/| |_| | |\  |___) | |___
-|_|    \___/|_|  |_/_/   \_\_| \_\_____|____/|_|    \___/|_| \_|____/|_____|</div>
-    <div class="logo-sub">MANAGED SECURITY SERVICES  //  INCIDENT RESPONSE PLATFORM v1.0.0</div>
-  </div>
-  <div id="boot-log"></div>
-  <div id="boot-prompt" style="display:none">▋ PRESS ANY KEY TO CONTINUE</div>
-  <div id="boot-skip-hint">TAP TO SKIP</div>
-</div>
+<!-- TITLE: the terminal (games-meta STANDARD.md §16), drawn by js/title.js -->
+<div id="title" hidden></div>
 
 <!-- GAME SCREEN -->
 <div id="game-screen">
@@ -101,6 +89,7 @@
     <button class="overlay-btn" id="new-incident-btn">NEW INCIDENT</button>
     <button class="overlay-btn" id="choose-incident-btn">CHOOSE SCENARIO</button>
     <button class="overlay-btn" id="copy-result-btn">COPY RESULT</button>
+    <button class="overlay-btn" id="end-main-btn">MAIN MENU</button>
   </div>
 </div>
 
@@ -113,22 +102,36 @@
       <button class="menu-action" id="menu-replay">↺ REPLAY THIS INCIDENT</button>
       <button class="menu-action" id="menu-random">▸ NEW RANDOM INCIDENT</button>
     </div>
-    <div class="menu-section">DECISION CLOCK</div>
-    <div class="menu-actions">
-      <button class="menu-action" id="clock-realtime" aria-pressed="true">REAL-TIME</button>
-      <button class="menu-action" id="clock-turn" aria-pressed="false">TURN-BASED</button>
-    </div>
-    <p class="menu-note">Real-time: each phase opens with the clock stopped so you can read. Starting the clock shows your options, and the attacker keeps moving until you decide. Turn-based: no clock.</p>
     <div class="menu-section">CHOOSE A SCENARIO</div>
     <div id="scenario-list"></div>
-    <div class="menu-section">GAME DATA</div>
-    <p class="menu-note">Personal bests and your clock setting are kept in this browser only.</p>
     <div class="menu-actions">
-      <button class="menu-action menu-reset" id="menu-reset">RESET PROGRESS</button>
+      <button class="menu-action" id="menu-settings">⚙ SETTINGS</button>
+      <button class="menu-action" id="menu-main">◂ MAIN MENU</button>
     </div>
-    <p class="menu-note menu-reset-note" id="menu-reset-note" aria-live="polite"></p>
     <button id="menu-close-btn">[CANCEL]</button>
     <div class="gk-credit">Built by <a href="https://greykit.com/" target="_blank" rel="noopener">greykit.com</a></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div id="settings-modal-inner">
+    <h2 id="settings-title">// SETTINGS</h2>
+    <div id="settings-body"></div>
+    <button id="settings-close-btn">[CLOSE]</button>
+  </div>
+</div>
+
+<!-- HOW TO PLAY: Help from the title, where there is no incident for the tour to point at -->
+<div id="howto-modal" role="dialog" aria-modal="true" aria-labelledby="howto-title">
+  <div id="howto-modal-inner">
+    <h2 id="howto-title">// HOW TO PLAY</h2>
+    <p>You are an analyst at a Managed Security Service Provider. An incident lands in your queue, and you work it through six phases: Triage, Containment, Investigation, Eradication, Recovery and Post-Incident.</p>
+    <p>Each phase gives you a briefing, the IOCs, the evidence and a live SIEM feed. Tag the evidence lines that matter as findings: a real one can unlock a better response, and a false lead costs time. Then pick one of the responses. Your choices carry forward into later phases.</p>
+    <p>With the real-time clock, each phase opens with the clock stopped so you can read; once you start it, the attacker keeps moving until you decide. Turn-based play, in Settings, has no clock.</p>
+    <p>You are scored on response time, containment, evidence and thoroughness, and graded A to F against the best the scenario allows.</p>
+    <p><span class="howto-key">A–E</span> or <span class="howto-key">1–5</span> pick a response · <span class="howto-key">Enter</span> starts the clock and carries on · <span class="howto-key">M</span> sound · <span class="howto-key">Esc</span> closes menus. In an incident, <span class="howto-key">HELP</span> in the header tours the screen.</p>
+    <button id="howto-close-btn">[CLOSE]</button>
   </div>
 </div>
 
@@ -149,6 +152,9 @@
   </div>
 </div>
 
+<script src="js/gk-title.js"></script>
+<script src="js/gk-intro.js"></script>
+<script src="js/gk-terminal.js"></script>
 <script src="js/game.js"></script>
 <script src="js/scenarios/ransomware.js"></script>
 <script src="js/scenarios/bec.js"></script>
@@ -157,5 +163,6 @@
 <script src="js/scenarios/cloud-breach.js"></script>
 <script src="js/scenarios/ddos-diversion.js"></script>
 <script src="js/scenarios/webapp-rce.js"></script>
+<script src="js/title.js"></script>
 </body>
 </html>
