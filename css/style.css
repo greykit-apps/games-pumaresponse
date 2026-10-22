@@ -868,6 +868,11 @@ body::after {
 @media (hover: none) {
   .note-remove { opacity: 1; pointer-events: auto; }
 }
+/* A finger, not a pointer: each evidence line gets a fingertip's height, so a
+   tap tags the line meant and not its neighbour as a false lead */
+@media (hover: none) and (pointer: coarse) {
+  .ev-taggable:not(.locked) .ev-line { padding-top: 7px; padding-bottom: 7px; }
+}
 
 /* ===================== RIGHT PANEL: SIEM & NOTES ===================== */
 #right-panel { border-right: none; border-left: 1px solid var(--border); }
@@ -1127,7 +1132,11 @@ body::after {
   .evidence-box pre { font-size: 11px; }
 
   /* SIEM expand: full width on mobile */
-  #main.siem-expanded #right-panel { width: 85%; }
+  /* the feed already has the whole width: its lines wrap, and there is
+     nothing to widen */
+  #main.siem-expanded #right-panel { position: static; width: auto; box-shadow: none; }
+  #main.siem-expanded ~ #siem-overlay { display: none; }
+  .siem-entry { white-space: normal; }
 
   /* End screen: mobile-friendly */
   #end-screen { padding: 16px; }
@@ -1162,7 +1171,22 @@ body::after {
   /* Narrative and evidence: tighter padding */
   .narrative-box { padding: 10px 8px; }
   .evidence-box { padding: 8px; }
-  .evidence-box pre { font-size: 10px; }
+  .evidence-box pre { font-size: 12px; }
+  .siem-entry, .note-entry { font-size: 12px; }
+
+  /* Header: one band. The name and the ticket number go (the ticket is in
+     the brief); severity, elapsed and the phase stack on the left, and the
+     three buttons stand to their right, so the band is the buttons' height
+     rather than three rows. */
+  #header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-auto-rows: auto; column-gap: 6px; row-gap: 1px; align-items: center; }
+  #header-title, #header .header-stat:nth-of-type(2) { display: none; }
+  #header .header-stat, #phase-indicator { grid-column: 1; margin: 0; width: auto; font-size: 11px; line-height: 1.35; }
+  #help-btn, #menu-btn, #about-btn { grid-row: 1 / span 3; }
+  #help-btn { grid-column: 2; } #menu-btn { grid-column: 3; } #about-btn { grid-column: 4; }
+
+  /* the tag count goes under the evidence title, not floated over the lines */
+  .ev-hint { float: none; display: block; margin-top: 3px; }
 
   /* End screen: tighten */
   .end-title { font-size: 20px; }

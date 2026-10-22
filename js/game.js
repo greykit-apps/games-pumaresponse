@@ -3,6 +3,8 @@
 // ═══════════════════════════════════════════════════
 
 const $ = id => document.getElementById(id);
+// A phone or tablet: say tap, and name no keys.
+const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
 // ── THE TITLE'S FLAGS ──────────────────────────────
 // js/title.js opens the game: canon's boot, then the terminal title over an
@@ -287,7 +289,7 @@ function updateTagCount() {
   const phase = STATE.incident.phases[STATE.phaseIdx].name;
   const n = new Set(STATE.evLines.filter((id, i) => id && $('ev-line-' + i).classList.contains('finding'))).size;
   const k = document.querySelectorAll('.ev-line.noise').length;
-  el.innerHTML = `CLICK LINES TO TAG · <b>${n}</b> finding${n === 1 ? '' : 's'}${k ? ` · ${k} false` : ''}`;
+  el.innerHTML = `${TOUCH ? 'TAP' : 'CLICK'} LINES TO TAG · <b>${n}</b> finding${n === 1 ? '' : 's'}${k ? ` · ${k} false` : ''}`;
 }
 
 function tagLine(i) {
@@ -966,8 +968,8 @@ $('about-modal').addEventListener('keydown', (e) => {
 // Each step: the area to light, a title, an optional key line (highlighted), and the body
 const HELP_STEPS = [
   { el: () => document.querySelector('#action-body .evidence-box'), panel: 'action', title: 'EVIDENCE',
-    key: 'Click the lines that matter. A finding can unlock a fourth response option — often the strongest move in the phase, and there is no other way to get it.',
-    body: 'Click a line, or use ↑ ↓ and Enter, to tag it as a finding. Findings also earn evidence points and strengthen your report, and some change what happens later. Tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters. You can tag before or after starting the clock.' },
+    key: (TOUCH ? 'Tap' : 'Click') + ' the lines that matter. A finding can unlock a fourth response option — often the strongest move in the phase, and there is no other way to get it.',
+    body: (TOUCH ? 'Tap a line' : 'Click a line, or use ↑ ↓ and Enter,') + ' to tag it as a finding. Findings also earn evidence points and strengthen your report, and some change what happens later. Tagging noise is a false lead that costs time. Colour shows what a token is — severity words, IP addresses — never whether it matters. You can tag before or after starting the clock.' },
   { el: () => document.querySelector('.ioc-list'), panel: 'brief', title: 'INDICATORS OF COMPROMISE',
     body: 'What was known at handoff: hashes, IPs, domains, accounts. They are where the investigation starts, not the whole story — each phase\'s evidence turns up more.' },
   { el: () => $('score-tracker'), panel: 'brief', title: 'PERFORMANCE METRICS',
@@ -984,9 +986,10 @@ const HELP_STEPS = [
     panel: 'action', title: 'RESPONSE OPTIONS',
     body: () => STATE.awaitingContinue
       ? 'The outcome of your decision: what happened, and what it scored. Proceed when you are ready — the consequences may follow you into later phases.'
-      : 'Three options each phase, sometimes a fourth unlocked by a finding you tagged. Choose with A–D, 1–4, or a click. There is no undo.' },
+      : 'Three options each phase, sometimes a fourth unlocked by a finding you tagged. ' + (TOUCH ? 'Tap one to choose it.' : 'Choose with A–D, 1–4, or a click.') + ' There is no undo.' },
   { el: () => $('siem-feed-col'), panel: 'siem', title: 'SIEM FEED',
-    body: 'Events as they happen, stamped on the incident\'s clock: each phase\'s alerts, what the attacker does while your clock runs, and the result of every decision. Click the panel to widen it.' },
+    body: () => 'Events as they happen, stamped on the incident\'s clock: each phase\'s alerts, what the attacker does while your clock runs, and the result of every decision.'
+      + (matchMedia('(max-width: 900px)').matches ? '' : ' ' + (TOUCH ? 'Tap' : 'Click') + ' the panel to widen it.') },
   { el: () => $('notes-col'), panel: 'siem', title: 'ANALYST NOTES',
     key: 'Every evidence line you tag lands here as a finding. When one unlocks a response option, this log says so, and the new option appears marked ◆ UNLOCKED BY YOUR FINDING.',
     body: 'It also records false leads and each action you take. Findings carry forward: one tagged in an early phase can unlock an option several phases later. Hover a note to remove it — that only tidies the log; the finding stays tagged and scored.' },

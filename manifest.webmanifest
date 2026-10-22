@@ -1,0 +1,14 @@
+{
+  "name": "PumaResponse",
+  "short_name": "PumaResponse",
+  "description": "A browser-based incident response training simulator. Work through six phases of cybersecurity incidents as an MSSP analyst.",
+  "start_url": ".",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#020c03",
+  "theme_color": "#020c03",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
