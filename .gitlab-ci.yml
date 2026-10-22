@@ -1,5 +1,16 @@
 stages:
+  - validate
   - deploy
+
+# The page loads its scripts from js/ and js/scenarios/, and the deploy below
+# ships the directory minus its excludes. A script that misses the trip -- an
+# exclude that catches it, or a file never committed -- 404s while the
+# pipeline goes green. Catch that before deploy. (games-meta canon/check-ship.js)
+validate:
+  stage: validate
+  image: node:20-alpine
+  script:
+    - node tools/check-ship.js
 
 deploy:
   stage: deploy
@@ -55,8 +66,9 @@ deploy:
   script:
     # PRODUCT.md, DESIGN.md, .impeccable/ and .impeccable.md are design notes
     # the impeccable skill writes into the repo root (games-meta STANDARD.md
-    # §12). They stay in the repo and off the live site.
-    - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='PRODUCT.md' --exclude='DESIGN.md' --exclude='.impeccable' --exclude='.impeccable.md' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/greykit.com/games/pumaresponse/
+    # §12). They stay in the repo and off the live site. So does tools/: the
+    # scenario harness and the validate stage's check-ship.js are dev-only.
+    - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='PRODUCT.md' --exclude='DESIGN.md' --exclude='.impeccable' --exclude='.impeccable.md' --exclude='.gitlab-ci.yml' --exclude='tools' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/greykit.com/games/pumaresponse/
   # environment: lets GitLab's "Prevent outdated deployment jobs" act on this
   # job, so a deploy from an older pipeline that starts after a newer one has
   # deployed fails instead of republishing stale files. resource_group: runs
